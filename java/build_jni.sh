@@ -149,7 +149,7 @@ while [ "${1:-}" != "" ]; do
             ;;
 
         android )
-            android_abis+=(arm64-v8a armeabi-v7a x86_64 x86)
+            android_abis+=(arm64-v8a armeabi-v7a x86_64)
             ;;
         android-arm64 | android-aarch64 )
             android_abis+=(arm64-v8a)
