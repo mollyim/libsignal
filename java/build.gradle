@@ -3,9 +3,8 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id "base"
-    id "signing"
+    id "maven-publish"
     id "com.diffplug.spotless" version "7.2.1"
-    id "io.github.gradle-nexus.publish-plugin" version "2.0.0"
 
     id "org.jetbrains.kotlin.jvm" version "2.1.0" apply false
     id "org.jetbrains.dokka" version "2.0.0" apply false
@@ -23,7 +22,12 @@ repositories {
 
 allprojects {
     version = "0.78.2"
-    group   = "org.signal"
+    group   = "im.molly"
+
+    def overrideVersion = System.getenv("OVERRIDE_VERSION")
+    if (overrideVersion) {
+        version = overrideVersion.replaceFirst(/^v/, '')
+    }
 
     tasks.withType(KotlinCompile).configureEach {
         compilerOptions.jvmTarget = JvmTarget.JVM_17
@@ -105,30 +109,15 @@ clean.dependsOn([cargoClean, cleanJni])
 
 // PUBLISHING
 
-ext.setUpSigningKey = { signingExt ->
-    def signingKeyId = findProperty("signingKeyId")
-    def signingKey = findProperty("signingKey")
-    def signingPassword = findProperty("signingPassword")
-    if (signingKeyId && signingKey && signingPassword) {
-        signingExt.useInMemoryPgpKeys(signingKeyId.trim(), signingKey.trim(), signingPassword.trim())
-    }
-}
-
-nexusPublishing {
-    repositories {
-        sonatype {
-            username = project.findProperty('sonatypeUsername') ?: ""
-            password = project.findProperty('sonatypePassword') ?: ""
-            // This is the recommended configuration from the README for the plugin we use, gradle-nexus/publish-plugin.
-            // The URLs are from https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/#configuration
-            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+ext.addCloudsmithRepo = { repoHandler ->
+    repoHandler.maven {
+        name = 'Cloudsmith'
+        url = uri('https://maven.cloudsmith.io/mollyim/libsignal/')
+        credentials {
+            username = System.getenv('CLOUDSMITH_USER')
+            password = System.getenv('CLOUDSMITH_API_KEY')
         }
     }
-}
-
-def isReleaseBuild() {
-    return version.contains("SNAPSHOT") == false
 }
 
 // Late evaluation after this point.

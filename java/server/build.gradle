@@ -1,7 +1,6 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'signing'
     id 'org.jetbrains.kotlin.jvm'
 }
 
@@ -82,11 +81,19 @@ processResources {
     dependsOn ':makeJniLibrariesServer'
 }
 
+afterEvaluate {
+    tasks.withType(Exec).configureEach { task ->
+        task.doFirst {
+            logger.lifecycle("[Exec] Running command: ${task.commandLine.join(' ')}")
+        }
+    }
+}
+
 // MARK: Publishing
 
 publishing {
     publications {
-        mavenJava(MavenPublication) {
+        server(MavenPublication) {
             artifactId = archivesBaseName
             from components.java
             artifact dokkaHtmlJar
@@ -95,12 +102,12 @@ publishing {
             pom {
                 name = archivesBaseName
                 description = 'Signal Protocol cryptography library for Java (server-side)'
-                url = 'https://github.com/signalapp/libsignal'
+                url = 'https://github.com/mollyim/libsignal'
 
                 scm {
-                    url = 'scm:git@github.com:signalapp/libsignal.git'
-                    connection = 'scm:git@github.com:signalapp/libsignal.git'
-                    developerConnection = 'scm:git@github.com:signalapp/libsignal.git'
+                    url = 'https://github.com/mollyim/libsignal/'
+                    connection = 'scm:git:git://github.com/mollyim/libsignal.git'
+                    developerConnection = 'scm:git:git@github.com:mollyim/libsignal.git'
                 }
 
                 licenses {
@@ -110,18 +117,13 @@ publishing {
                     }
                 }
 
-                developers {
-                    developer {
-                        name = 'Signal Messenger LLC'
-                    }
+                organization {
+                    url = 'https://molly.im'
                 }
             }
         }
     }
-}
-
-setUpSigningKey(signing)
-signing {
-    required { isReleaseBuild() && gradle.taskGraph.hasTask(":server:publish") }
-    sign publishing.publications.mavenJava
+    repositories {
+        rootProject.ext.addCloudsmithRepo(delegate)
+    }
 }
