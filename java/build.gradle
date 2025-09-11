@@ -4,7 +4,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     id "base"
     id "maven-publish"
-    id "com.diffplug.spotless" version "7.2.1"
 
     id "org.jetbrains.kotlin.jvm" version "2.1.0" apply false
     id "org.jetbrains.dokka" version "2.0.0" apply false
@@ -117,34 +116,5 @@ ext.addCloudsmithRepo = { repoHandler ->
             username = System.getenv('CLOUDSMITH_USER')
             password = System.getenv('CLOUDSMITH_API_KEY')
         }
-    }
-}
-
-// Late evaluation after this point.
-
-evaluationDependsOnChildren()
-
-spotless {
-    kotlin {
-        target allprojects.collectMany {
-            return it.tasks.withType(KotlinCompile)
-        }.inject(files()) { collected, next ->
-            collected + next.sources
-        }
-        ktlint()
-    }
-    java {
-        target allprojects.collectMany {
-            return it.tasks.withType(JavaCompile)
-        }.inject(files()) { collected, next ->
-            collected + next.source
-        }
-        targetExclude('**/Native.java', '**/NativeTesting.java')
-        importOrder()
-        removeUnusedImports()
-
-        googleJavaFormat()
-        formatAnnotations()
-        licenseHeaderFile rootProject.file('license_header.txt')
     }
 }

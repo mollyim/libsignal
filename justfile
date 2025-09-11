@@ -25,21 +25,17 @@ generate-bridge: generate-jni generate-node generate-ffi
 
 alias generate-all := generate-bridge
 
-format-jni:
-    (cd java && ./gradlew spotlessApply)
-
 format-ffi:
     (cd swift && swift format --in-place --parallel --recursive .)
 
 format-node:
     (cd node && npm run format)
 
-alias format-java := format-jni
 alias format-swift := format-ffi
 alias format-ts := format-node
 
 # Auto-format code in Java, Rust, Swift, and TypeScript
-format-all: format-jni format-ffi format-node
+format-all: format-ffi format-node
     cargo fmt
     taplo fmt
 
