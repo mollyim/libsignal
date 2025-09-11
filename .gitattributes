@@ -8,3 +8,6 @@ acknowledgments/acknowledgments.*.hbs merge text=auto
 
 # Avoid Windows line-endings for files compared literally.
 **/*.expected.json text eol=lf
+
+# MOLLY: Reduce the number of merge conflicts.
+/gradle/verification-metadata.xml merge=union
