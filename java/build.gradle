@@ -108,13 +108,23 @@ clean.dependsOn([cargoClean, cleanJni])
 
 // PUBLISHING
 
-ext.addCloudsmithRepo = { repoHandler ->
-    repoHandler.maven {
-        name = 'Cloudsmith'
-        url = uri('https://maven.cloudsmith.io/mollyim/libsignal/')
-        credentials {
+// Late evaluation after this point.
+
+evaluationDependsOnChildren()
+
+subprojects {
+  plugins.withType(MavenPublishPlugin) {
+    publishing {
+      repositories {
+        maven {
+          name = 'Cloudsmith'
+          url = uri('https://maven.cloudsmith.io/mollyim/libsignal/')
+          credentials {
             username = System.getenv('CLOUDSMITH_USER')
             password = System.getenv('CLOUDSMITH_API_KEY')
+          }
         }
+      }
     }
+  }
 }

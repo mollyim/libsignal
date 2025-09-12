@@ -146,7 +146,4 @@ publishing {
             }
         }
     }
-    repositories {
-        rootProject.ext.addCloudsmithRepo(delegate)
-    }
 }

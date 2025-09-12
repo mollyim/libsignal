@@ -215,7 +215,4 @@ afterEvaluate {
             }
         }
     }
-    repositories {
-        rootProject.ext.addCloudsmithRepo(delegate)
-    }
 }
