@@ -67,7 +67,7 @@ RUN SNAPSHOT_ID=$(git show -s --format=%cd --date=format:%Y%m%dT%H%M%SZ HEAD) &&
 RUN cat <<'EOF' > build.sh
 #!/bin/sh
 set -eu
-export OVERRIDE_VERSION=$(git describe --tags)
+export OVERRIDE_VERSION=$(git describe --tags --always)
 ./java/gradlew -p java "$@"
 EOF
 RUN chmod +x build.sh
