@@ -1,0 +1,25 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync libsignal
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: upstream
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - run: git remote add upstream https://github.com/signalapp/libsignal.git
+      - run: git pull --ff-only upstream main
+      - run: git push origin upstream
