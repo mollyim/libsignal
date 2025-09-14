@@ -42,6 +42,7 @@ pub use tokio::TokioAsyncContext;
 pub enum Environment {
     Staging = 0,
     Prod = 1,
+    Dev = 2,
 }
 
 impl Environment {
@@ -49,6 +50,7 @@ impl Environment {
         match self {
             Self::Staging => libsignal_net::env::STAGING,
             Self::Prod => libsignal_net::env::PROD,
+            Self::Dev => libsignal_net::env::DEV,
         }
     }
 }
