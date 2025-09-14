@@ -23,7 +23,8 @@ import org.signal.libsignal.net.internal.ConnectChatBridge;
 public class Network {
   public enum Environment {
     STAGING(0),
-    PRODUCTION(1);
+    PRODUCTION(1),
+    DEV(2);
 
     // Intentionally package-private to be used in KeyTransparencyClient, without exposing it to the
     // whole world.

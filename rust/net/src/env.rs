@@ -28,7 +28,7 @@ use nonzero_ext::nonzero;
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 
-use crate::certs::{PROXY_G_ROOT_CERTIFICATES, SIGNAL_ROOT_CERTIFICATES};
+use crate::certs::{PROXY_G_ROOT_CERTIFICATES, SIGNAL_ROOT_CERTIFICATES, INTERNAL_DEV_CERTIFICATE};
 use crate::chat::RECOMMENDED_CHAT_WS_CONFIG;
 use crate::connect_state::ServiceName;
 use crate::enclave::{Cdsi, EnclaveEndpoint, EndpointParams, MrEnclave, SvrSgx};
@@ -105,6 +105,19 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
     },
 };
 
+const DOMAIN_CONFIG_CHAT_DEV: DomainConfig = DomainConfig {
+    ip_v4: &[ip_addr!(v4, "127.0.0.1")],
+    ip_v6: &[ip_addr!(v6, "::1")],
+    connect: ConnectionConfig {
+        hostname: "whisper.flatline.internal",
+        port: nonzero!(8443_u16),
+        cert: INTERNAL_DEV_CERTIFICATE,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
+        proxy: None,
+    },
+};
+
 const DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING: DomainConfig = DomainConfig {
     ip_v4: &[],
     ip_v6: &[],
@@ -155,6 +168,19 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
     },
     ip_v4: &[ip_addr!(v4, "104.43.162.137")],
     ip_v6: &[ip_addr!(v6, "2603:1030:7::732")],
+};
+
+const DOMAIN_CONFIG_CDSI_DEV: DomainConfig = DomainConfig {
+    connect: ConnectionConfig {
+        hostname: "cds.flatline.internal",
+        port: nonzero!(8443_u16),
+        cert: INTERNAL_DEV_CERTIFICATE,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        confirmation_header_name: None,
+        proxy: None,
+    },
+    ip_v4: &[ip_addr!(v4, "127.0.0.1")],
+    ip_v6: &[ip_addr!(v6, "::1")],
 };
 
 const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
@@ -221,6 +247,19 @@ const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
     ],
 };
 
+const DOMAIN_CONFIG_SVR2_DEV: DomainConfig = DomainConfig {
+    connect: ConnectionConfig {
+        hostname: "invalid",
+        port: DEFAULT_HTTPS_PORT,
+        cert: INTERNAL_DEV_CERTIFICATE,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        confirmation_header_name: None,
+        proxy: None,
+    },
+    ip_v4: &[],
+    ip_v6: &[],
+};
+
 const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
         service: ServiceName("svrb"),
@@ -283,6 +322,19 @@ const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
         ip_addr!(v6, "2603:1030:c02:5::632"),
         ip_addr!(v6, "2603:1030:f00:3::27"),
     ],
+};
+
+const DOMAIN_CONFIG_SVRB_DEV: DomainConfig = DomainConfig {
+    connect: ConnectionConfig {
+        hostname: "invalid",
+        port: DEFAULT_HTTPS_PORT,
+        cert: INTERNAL_DEV_CERTIFICATE,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        confirmation_header_name: None,
+        proxy: None,
+    },
+    ip_v4: &[],
+    ip_v6: &[],
 };
 
 pub const PROXY_CONFIG_F_PROD: ProxyConfig = ProxyConfig {
@@ -357,6 +409,11 @@ pub(crate) const ENDPOINT_PARAMS_SVRB_2026Q1_PROD: EndpointParams<'static, SvrSg
 
 pub(crate) const ENDPOINT_PARAMS_CDSI_PROD: EndpointParams<'static, Cdsi> = EndpointParams {
     mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_CDSI_PROD),
+    raft_config: (),
+};
+
+pub(crate) const ENDPOINT_PARAMS_CDSI_DEV: EndpointParams<'static, Cdsi> = EndpointParams {
+    mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_CDSI_DEV),
     raft_config: (),
 };
 
@@ -863,6 +920,32 @@ pub const PROD: Env<'static> = Env {
         ],
     },
     keytrans_config: KEYTRANS_CONFIG_PROD,
+};
+
+pub const DEV: Env<'static> = Env {
+    chat_domain_config: DOMAIN_CONFIG_CHAT_DEV,
+    chat_noise_config: None,
+    chat_ws_config: RECOMMENDED_CHAT_WS_CONFIG,
+    cdsi: EnclaveEndpoint {
+        domain_config: DOMAIN_CONFIG_CDSI_DEV,
+        ws_config: RECOMMENDED_WS_CONFIG,
+        params: ENDPOINT_PARAMS_CDSI_DEV,
+    },
+    svr2: EnclaveEndpoint {
+        domain_config: DOMAIN_CONFIG_SVR2_DEV,
+        ws_config: RECOMMENDED_WS_CONFIG,
+        params: ENDPOINT_PARAMS_SVR2_STAGING,
+    },
+    svr_b: SvrBEnv {
+        current: EnclaveEndpoint {
+            domain_config: DOMAIN_CONFIG_SVRB_DEV,
+            ws_config: RECOMMENDED_WS_CONFIG,
+            params: ENDPOINT_PARAMS_SVRB_STAGING,
+        },
+        previous: [None, None, None],
+    },
+    // FLT(uoemai): Staging configuration used as placeholder.
+    keytrans_config: KEYTRANS_CONFIG_STAGING,
 };
 
 pub mod constants {
