@@ -8,15 +8,15 @@ use std::sync::Arc;
 use attest::client_connection::ClientConnection;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tungstenite::protocol::frame::coding::CloseCode;
 use tungstenite::protocol::CloseFrame;
+use tungstenite::protocol::frame::coding::CloseCode;
 
 use crate::ws::connection::{
     FinishReason, MessageEvent, NextEventError, Outcome, TungsteniteReceiveError,
     TungsteniteSendError,
 };
 use crate::ws::error::{ProtocolError, SpaceError, UnexpectedCloseError};
-use crate::ws::{NextOrClose, TextOrBinary, WebSocketServiceError, WebSocketStreamLike};
+use crate::ws::{NextOrClose, TextOrBinary, WebSocketError, WebSocketStreamLike};
 
 /// Encrypted connection to an attested host.
 #[derive(Debug)]
@@ -39,7 +39,7 @@ pub enum AttestedProtocolError {
 pub enum AttestedConnectionError {
     Protocol(AttestedProtocolError),
     Attestation(attest::enclave::Error),
-    WebSocket(WebSocketServiceError),
+    WebSocket(WebSocketError),
 }
 
 impl From<attest::client_connection::Error> for AttestedConnectionError {
@@ -274,7 +274,9 @@ async fn spawned_task_body(
                         .send(Err(tungstenite_send_error.into()))
                         .is_err()
                     {
-                        log::debug!("[{log_tag}] failed to signal send error because the sender was dropped");
+                        log::debug!(
+                            "[{log_tag}] failed to signal send error because the sender was dropped"
+                        );
                     }
                     return Err(task_err);
                 }
@@ -320,7 +322,9 @@ async fn spawned_task_body(
                             .await
                             .is_err()
                         {
-                            log::debug!("[{log_tag}] failed to send abnormal close event because the receiver was dropped");
+                            log::debug!(
+                                "[{log_tag}] failed to send abnormal close event because the receiver was dropped"
+                            );
                         }
                         return Err(TaskExitError::AbnormalServerClose { code });
                     }
@@ -447,7 +451,7 @@ impl From<ReceiveError> for AttestedConnectionError {
                 AttestedConnectionError::WebSocket(tungstenite_receive_error.into())
             }
             ReceiveError::ServerIdleTooLong(_duration) => {
-                AttestedConnectionError::WebSocket(WebSocketServiceError::ChannelIdleTooLong)
+                AttestedConnectionError::WebSocket(WebSocketError::ChannelIdleTooLong)
             }
             ReceiveError::UnexpectedConnectionClose => AttestedConnectionError::Protocol(
                 AttestedProtocolError::UnexpectedClose(UnexpectedCloseError::from(None)),
@@ -466,16 +470,14 @@ impl From<SendError> for AttestedConnectionError {
                 AttestedProtocolError::UnexpectedClose(UnexpectedCloseError::from(None)),
             ),
             SendError::WebSocketProtocol(protocol_error) => {
-                AttestedConnectionError::WebSocket(WebSocketServiceError::Protocol(protocol_error))
+                AttestedConnectionError::WebSocket(WebSocketError::Protocol(protocol_error))
             }
-            SendError::Io(error) => {
-                AttestedConnectionError::WebSocket(WebSocketServiceError::Io(error))
-            }
-            SendError::MessageTooLarge { size, max_size } => AttestedConnectionError::WebSocket(
-                WebSocketServiceError::Capacity(SpaceError::Capacity(
+            SendError::Io(error) => AttestedConnectionError::WebSocket(WebSocketError::Io(error)),
+            SendError::MessageTooLarge { size, max_size } => {
+                AttestedConnectionError::WebSocket(WebSocketError::Capacity(SpaceError::Capacity(
                     tungstenite::error::CapacityError::MessageTooLong { size, max_size },
-                )),
-            ),
+                )))
+            }
         }
     }
 }
@@ -544,6 +546,7 @@ pub mod testutil {
         let mut server_hs =
             snow::Builder::new(attest::client_connection::NOISE_PATTERN.parse().unwrap())
                 .local_private_key(private_key.as_ref())
+                .unwrap()
                 .build_responder()
                 .unwrap();
 
@@ -610,11 +613,11 @@ mod test {
     use tokio_tungstenite::WebSocketStream;
 
     use super::*;
+    use crate::AsyncDuplexStream;
     use crate::ws::attested::testutil::{
-        run_attested_server, AttestedServerOutput, FAKE_ATTESTATION,
+        AttestedServerOutput, FAKE_ATTESTATION, run_attested_server,
     };
     use crate::ws::testutil::fake_websocket;
-    use crate::AsyncDuplexStream;
 
     const ECHO_BYTES: &[u8] = b"two nibbles to a byte";
 

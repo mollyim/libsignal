@@ -1,3 +1,3 @@
-v0.78.2
+v0.80.2
 
-- Finalize errors produced by SVR-B operations.
+- backups: Add logging to BackupAuthCredentialRequestContext_ReceiveResponse internals

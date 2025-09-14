@@ -9,15 +9,15 @@ use std::time::Duration;
 use futures_util::{Sink, Stream, TryFutureExt};
 use http::uri::PathAndQuery;
 use tungstenite::protocol::CloseFrame;
-use tungstenite::{http, Message, Utf8Bytes};
+use tungstenite::{Message, Utf8Bytes, http};
 
+use crate::AsyncDuplexStream;
 use crate::errors::LogSafeDisplay;
 use crate::route::{Connector, HttpRouteFragment, WebSocketRouteFragment};
 use crate::ws::error::{HttpFormatError, ProtocolError, SpaceError};
-use crate::AsyncDuplexStream;
 
 pub mod error;
-pub use error::{LogSafeTungsteniteError, WebSocketConnectError};
+pub use error::WebSocketConnectError;
 
 pub mod connection;
 pub use connection::Connection;
@@ -74,13 +74,13 @@ impl<S> WebSocketStreamLike for S where
 
 /// A simplified version of [`tungstenite::Error`] that supports [`LogSafeDisplay`].
 #[derive(Debug, thiserror::Error)]
-pub enum WebSocketServiceError {
+pub enum WebSocketError {
     ChannelClosed,
     ChannelIdleTooLong,
     Io(std::io::Error),
     Protocol(ProtocolError),
     Capacity(SpaceError),
-    Http(http::Response<Option<Vec<u8>>>),
+    Http(Box<http::Response<Option<Vec<u8>>>>),
     HttpFormat(http::Error),
     Url(tungstenite::error::UrlError),
     Other(&'static str),
@@ -191,10 +191,10 @@ impl<T, Inner> Connector<(WebSocketRouteFragment, HttpRouteFragment), Inner>
     for WithoutResponseHeaders<T>
 where
     T: Connector<
-        (WebSocketRouteFragment, HttpRouteFragment),
-        Inner,
-        Connection = StreamWithResponseHeaders<tokio_tungstenite::WebSocketStream<Inner>>,
-    >,
+            (WebSocketRouteFragment, HttpRouteFragment),
+            Inner,
+            Connection = StreamWithResponseHeaders<tokio_tungstenite::WebSocketStream<Inner>>,
+        >,
 {
     type Connection = tokio_tungstenite::WebSocketStream<Inner>;
     type Error = T::Error;
@@ -214,28 +214,28 @@ where
     }
 }
 
-impl LogSafeDisplay for WebSocketServiceError {}
-impl Display for WebSocketServiceError {
+impl LogSafeDisplay for WebSocketError {}
+impl Display for WebSocketError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WebSocketServiceError::ChannelClosed => write!(f, "channel already closed"),
-            WebSocketServiceError::ChannelIdleTooLong => write!(f, "channel was idle for too long"),
-            WebSocketServiceError::Io(e) => write!(f, "IO error: {}", e.kind()),
-            WebSocketServiceError::Protocol(p) => {
+            WebSocketError::ChannelClosed => write!(f, "channel already closed"),
+            WebSocketError::ChannelIdleTooLong => write!(f, "channel was idle for too long"),
+            WebSocketError::Io(e) => write!(f, "IO error: {}", e.kind()),
+            WebSocketError::Protocol(p) => {
                 write!(f, "websocket protocol: {}", p.clone())
             }
-            WebSocketServiceError::Capacity(e) => write!(f, "capacity error: {e}"),
-            WebSocketServiceError::Http(response) => write!(f, "HTTP error: {}", response.status()),
-            WebSocketServiceError::HttpFormat(e) => {
+            WebSocketError::Capacity(e) => write!(f, "capacity error: {e}"),
+            WebSocketError::Http(response) => write!(f, "HTTP error: {}", response.status()),
+            WebSocketError::HttpFormat(e) => {
                 write!(f, "HTTP format error: {}", HttpFormatError::from(e))
             }
-            WebSocketServiceError::Url(_) => write!(f, "URL error"),
-            WebSocketServiceError::Other(message) => write!(f, "other web socket error: {message}"),
+            WebSocketError::Url(_) => write!(f, "URL error"),
+            WebSocketError::Other(message) => write!(f, "other web socket error: {message}"),
         }
     }
 }
 
-impl From<tungstenite::Error> for WebSocketServiceError {
+impl From<tungstenite::Error> for WebSocketError {
     fn from(value: tungstenite::Error) -> Self {
         match value {
             tungstenite::Error::ConnectionClosed => Self::ChannelClosed,
@@ -245,7 +245,7 @@ impl From<tungstenite::Error> for WebSocketServiceError {
             tungstenite::Error::Capacity(e) => Self::Capacity(e.into()),
             tungstenite::Error::WriteBufferFull(_) => Self::Capacity(SpaceError::SendQueueFull),
             tungstenite::Error::Url(e) => Self::Url(e),
-            tungstenite::Error::Http(response) => Self::Http(response),
+            tungstenite::Error::Http(response) => Self::Http(Box::new(response)),
             tungstenite::Error::HttpFormat(e) => Self::HttpFormat(e),
             tungstenite::Error::Utf8 => Self::Other("UTF-8 error"),
             tungstenite::Error::AttackAttempt => Self::Other("attack attempt"),

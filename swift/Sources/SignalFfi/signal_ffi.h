@@ -1324,6 +1324,11 @@ typedef struct {
 } SignalConstPointerServerCertificate;
 
 typedef struct {
+  const SignalConstPointerPublicKey *base;
+  size_t length;
+} SignalBorrowedSliceOfConstPointerPublicKey;
+
+typedef struct {
   SignalSenderKeyDistributionMessage *raw;
 } SignalMutPointerSenderKeyDistributionMessage;
 
@@ -1377,6 +1382,21 @@ typedef struct {
   const void *context;
   SignalCancellationId cancellation_id;
 } SignalCPromiseMutPointerUnauthenticatedChatConnection;
+
+/**
+ * A C callback used to report the results of Rust futures.
+ *
+ * cbindgen will produce independent C types like `SignalCPromisei32` and
+ * `SignalCPromiseProtocolAddress`.
+ *
+ * This derives Copy because it behaves like a C type; nevertheless, a promise should still only be
+ * completed once.
+ */
+typedef struct {
+  void (*complete)(SignalFfiError *error, const SignalOptionalUuid *result, const void *context);
+  const void *context;
+  SignalCancellationId cancellation_id;
+} SignalCPromiseOptionalUuid;
 
 typedef struct {
   SignalValidatingMac *raw;
@@ -1626,10 +1646,6 @@ SignalFfiError *signal_create_call_link_credential_request_issue_deterministic(S
 
 SignalFfiError *signal_create_call_link_credential_response_check_valid_contents(SignalBorrowedBuffer response_bytes);
 
-SignalFfiError *signal_create_otp(const char **out, const char *username, SignalBorrowedBuffer secret);
-
-SignalFfiError *signal_create_otp_from_base64(const char **out, const char *username, const char *secret);
-
 SignalFfiError *signal_decrypt_message(SignalOwnedBuffer *out, SignalConstPointerSignalMessage message, SignalConstPointerProtocolAddress protocol_address, SignalConstPointerFfiSessionStoreStruct session_store, SignalConstPointerFfiIdentityKeyStoreStruct identity_key_store);
 
 SignalFfiError *signal_decrypt_pre_key_message(SignalOwnedBuffer *out, SignalConstPointerPreKeySignalMessage message, SignalConstPointerProtocolAddress protocol_address, SignalConstPointerFfiSessionStoreStruct session_store, SignalConstPointerFfiIdentityKeyStoreStruct identity_key_store, SignalConstPointerFfiPreKeyStoreStruct prekey_store, SignalConstPointerFfiSignedPreKeyStoreStruct signed_prekey_store, SignalConstPointerFfiKyberPreKeyStoreStruct kyber_prekey_store, bool use_pq_ratchet);
@@ -1792,7 +1808,7 @@ SignalFfiError *signal_group_send_token_check_valid_contents(SignalBorrowedBuffe
 
 SignalFfiError *signal_group_send_token_to_full_token(SignalOwnedBuffer *out, SignalBorrowedBuffer token, uint64_t expiration);
 
-SignalFfiError *signal_hex_encode(char *output, size_t output_len, const uint8_t *input, size_t input_len);
+SignalFfiError *signal_hex_encode(SignalBorrowedMutableBuffer output, SignalBorrowedBuffer input);
 
 SignalFfiError *signal_hkdf_derive(SignalBorrowedMutableBuffer output, SignalBorrowedBuffer ikm, SignalBorrowedBuffer label, SignalBorrowedBuffer salt);
 
@@ -1842,7 +1858,7 @@ SignalFfiError *signal_key_transparency_distinguished(SignalCPromiseOwnedBufferO
 
 SignalFfiError *signal_key_transparency_e164_search_key(SignalOwnedBuffer *out, const char *e164);
 
-SignalFfiError *signal_key_transparency_monitor(SignalCPromiseOwnedBufferOfc_uchar *promise, SignalConstPointerTokioAsyncContext async_runtime, uint8_t environment, SignalConstPointerUnauthenticatedChatConnection chat_connection, const SignalServiceIdFixedWidthBinaryBytes *aci, SignalConstPointerPublicKey aci_identity_key, const char *e164, SignalOptionalBorrowedSliceOfc_uchar unidentified_access_key, SignalOptionalBorrowedSliceOfc_uchar username_hash, SignalOptionalBorrowedSliceOfc_uchar account_data, SignalBorrowedBuffer last_distinguished_tree_head);
+SignalFfiError *signal_key_transparency_monitor(SignalCPromiseOwnedBufferOfc_uchar *promise, SignalConstPointerTokioAsyncContext async_runtime, uint8_t environment, SignalConstPointerUnauthenticatedChatConnection chat_connection, const SignalServiceIdFixedWidthBinaryBytes *aci, SignalConstPointerPublicKey aci_identity_key, const char *e164, SignalOptionalBorrowedSliceOfc_uchar unidentified_access_key, SignalOptionalBorrowedSliceOfc_uchar username_hash, SignalOptionalBorrowedSliceOfc_uchar account_data, SignalBorrowedBuffer last_distinguished_tree_head, bool is_self_monitor);
 
 SignalFfiError *signal_key_transparency_search(SignalCPromiseOwnedBufferOfc_uchar *promise, SignalConstPointerTokioAsyncContext async_runtime, uint8_t environment, SignalConstPointerUnauthenticatedChatConnection chat_connection, const SignalServiceIdFixedWidthBinaryBytes *aci, SignalConstPointerPublicKey aci_identity_key, const char *e164, SignalOptionalBorrowedSliceOfc_uchar unidentified_access_key, SignalOptionalBorrowedSliceOfc_uchar username_hash, SignalOptionalBorrowedSliceOfc_uchar account_data, SignalBorrowedBuffer last_distinguished_tree_head);
 
@@ -2256,6 +2272,8 @@ SignalFfiError *signal_sealed_session_cipher_encrypt(SignalOwnedBuffer *out, Sig
 
 SignalFfiError *signal_secure_value_recovery_for_backups_create_new_backup_chain(SignalOwnedBuffer *out, uint8_t environment, const SignalBackupKeyBytes *backup_key);
 
+SignalFfiError *signal_secure_value_recovery_for_backups_remove_backup(SignalCPromisebool *promise, SignalConstPointerTokioAsyncContext async_runtime, SignalConstPointerConnectionManager connection_manager, const char *username, const char *password);
+
 SignalFfiError *signal_secure_value_recovery_for_backups_restore_backup_from_server(SignalCPromiseMutPointerBackupRestoreResponse *promise, SignalConstPointerTokioAsyncContext async_runtime, const SignalBackupKeyBytes *backup_key, SignalBorrowedBuffer metadata, SignalConstPointerConnectionManager connection_manager, const char *username, const char *password);
 
 SignalFfiError *signal_secure_value_recovery_for_backups_store_backup(SignalCPromiseMutPointerBackupStoreResponse *promise, SignalConstPointerTokioAsyncContext async_runtime, const SignalBackupKeyBytes *backup_key, SignalBorrowedBuffer previous_secret_data, SignalConstPointerConnectionManager connection_manager, const char *username, const char *password);
@@ -2286,7 +2304,7 @@ SignalFfiError *signal_sender_certificate_get_signature(SignalOwnedBuffer *out, 
 
 SignalFfiError *signal_sender_certificate_new(SignalMutPointerSenderCertificate *out, const char *sender_uuid, const char *sender_e164, uint32_t sender_device_id, SignalConstPointerPublicKey sender_key, uint64_t expiration, SignalConstPointerServerCertificate signer_cert, SignalConstPointerPrivateKey signer_key);
 
-SignalFfiError *signal_sender_certificate_validate(bool *out, SignalConstPointerSenderCertificate cert, SignalConstPointerPublicKey key, uint64_t time);
+SignalFfiError *signal_sender_certificate_validate(bool *out, SignalConstPointerSenderCertificate cert, SignalBorrowedSliceOfConstPointerPublicKey trust_roots, uint64_t time);
 
 SignalFfiError *signal_sender_key_distribution_message_clone(SignalMutPointerSenderKeyDistributionMessage *new_obj, SignalConstPointerSenderKeyDistributionMessage obj);
 
@@ -2489,6 +2507,8 @@ SignalFfiError *signal_unauthenticated_chat_connection_disconnect(SignalCPromise
 SignalFfiError *signal_unauthenticated_chat_connection_info(SignalMutPointerChatConnectionInfo *out, SignalConstPointerUnauthenticatedChatConnection chat);
 
 SignalFfiError *signal_unauthenticated_chat_connection_init_listener(SignalConstPointerUnauthenticatedChatConnection chat, SignalConstPointerFfiChatListenerStruct listener);
+
+SignalFfiError *signal_unauthenticated_chat_connection_look_up_username_hash(SignalCPromiseOptionalUuid *promise, SignalConstPointerTokioAsyncContext async_runtime, SignalConstPointerUnauthenticatedChatConnection chat, SignalBorrowedBuffer hash);
 
 SignalFfiError *signal_unauthenticated_chat_connection_send(SignalCPromiseFfiChatResponse *promise, SignalConstPointerTokioAsyncContext async_runtime, SignalConstPointerUnauthenticatedChatConnection chat, SignalConstPointerHttpRequest http_request, uint32_t timeout_millis);
 
