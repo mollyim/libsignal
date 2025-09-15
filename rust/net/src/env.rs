@@ -313,6 +313,11 @@ pub(crate) const ENDPOINT_PARAMS_SVR2_PROD: EndpointParams<'static, SvrSgx> = En
     raft_config: attest::constants::RAFT_CONFIG_SVR2_PROD,
 };
 
+pub(crate) const ENDPOINT_PARAMS_CDSI_DEV: EndpointParams<'static, Cdsi> = EndpointParams {
+    mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_CDSI_DEV),
+    raft_config: (),
+};
+
 pub(crate) const KEYTRANS_SIGNING_KEY_MATERIAL_STAGING: &[u8; 32] =
     &hex!("ac0de1fd7f33552bbeb6ebc12b9d4ea10bf5f025c45073d3fb5f5648955a749e");
 pub(crate) const KEYTRANS_VRF_KEY_MATERIAL_STAGING: &[u8; 32] =
@@ -782,22 +787,22 @@ pub const DEV: Env<'static> = Env {
     cdsi: EnclaveEndpoint {
         domain_config: DOMAIN_CONFIG_CDSI_DEV,
         ws_config: RECOMMENDED_WS_CONFIG,
-        params: ENDPOINT_PARAMS_CDSI_STAGING, // FIXME
+        params: ENDPOINT_PARAMS_CDSI_DEV,
     },
     svr2: EnclaveEndpoint {
         domain_config: DOMAIN_CONFIG_SVR2_DEV,
         ws_config: RECOMMENDED_WS_CONFIG,
-        params: ENDPOINT_PARAMS_SVR2_STAGING, // FIXME
+        params: ENDPOINT_PARAMS_SVR2_STAGING,
     },
     svr_b: SvrBEnv {
         current: EnclaveEndpoint {
             domain_config: DOMAIN_CONFIG_SVRB_DEV,
             ws_config: RECOMMENDED_WS_CONFIG,
-            params: ENDPOINT_PARAMS_SVRB_STAGING, // FIXME
+            params: ENDPOINT_PARAMS_SVRB_STAGING,
         },
         previous: [None, None, None],
     },
-    keytrans_config: KEYTRANS_CONFIG_STAGING, // FIXME
+    keytrans_config: KEYTRANS_CONFIG_STAGING,
 };
 
 pub mod constants {

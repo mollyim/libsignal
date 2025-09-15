@@ -65,6 +65,7 @@ def_enclaves! {
     ENCLAVE_ID_SVRB_PROD => ("aa906dbc85965d37accb660b65a8c224f037b0e7cfd034532acada3592e5b446", common),
     ENCLAVE_ID_CDSI_STAGING => ("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05", common),
     ENCLAVE_ID_CDSI_PROD => ("ee9503070127120074612b6688e593b67e486b1541449f54d71e387484eb40a3", common),
+    ENCLAVE_ID_CDSI_DEV => ("1234567890123456789012345678901234567890123456789012345678901234", common),
 }
 
 /// SW advisories known to be mitigated by default. If an MREnclave is provided that
