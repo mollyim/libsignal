@@ -86,8 +86,8 @@ const DOMAIN_CONFIG_CHAT_DEV: DomainConfig = DomainConfig {
     ip_v4: &[],
     ip_v6: &[],
     connect: ConnectionConfig {
-        hostname: "localhost",
-        port: nonzero!(8443_u16),
+        hostname: "flatline-whisper.localhost",
+        port: nonzero!(443_u16),
         cert: LOCALHOST_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
@@ -147,8 +147,8 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_CDSI_DEV: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "localhost",
-        port: nonzero!(20443_u16),
+        hostname: "flatline-cds.localhost",
+        port: nonzero!(443_u16),
         cert: LOCALHOST_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: None,
