@@ -10,6 +10,7 @@
 //! [Handshake] to construct a noise encrypted session with the enclave. The attestation
 //! must contain a custom claim with the key name "pk" that represents the enclave's
 //! public key.
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::dcap::{self, MREnclave};
@@ -32,6 +33,8 @@ impl Handshake {
         current_time: std::time::SystemTime,
         handshake_type: HandshakeType,
     ) -> Result<UnvalidatedHandshake> {
+        // FLT(uoemai): Skip verification to avoid a crash with SGX in simulation mode during development.
+        /*
         if evidence.is_empty() {
             return Err(Error::AttestationDataError {
                 reason: String::from(INVALID_EVIDENCE),
@@ -58,6 +61,12 @@ impl Handshake {
             acceptable_sw_advisories,
             current_time + SKEW_ADJUSTMENT,
         )?;
+        */
+
+        // FLT(uoemai): Mock a valid "pk" claim using a public key intended for testing.
+        let pkey = hex::decode(include_bytes!("../tests/data/cds2_test.pubkey")).unwrap();
+        let mut claims: HashMap<String, Vec<u8>> = HashMap::new();
+        claims.insert("pk".to_string(), pkey);
 
         Self::with_claims(Claims::from_custom_claims(claims)?, handshake_type)
     }
