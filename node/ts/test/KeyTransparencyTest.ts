@@ -3,21 +3,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../../Native';
-import { config, expect, use } from 'chai';
-import * as chaiAsPromised from 'chai-as-promised';
-import * as util from './util';
-import { UnauthenticatedChatConnection, Environment, Net } from '../net';
-import { Aci } from '../Address';
-import { PublicKey } from '../EcKeys';
+import { assert, config, expect, use } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
+import { Buffer } from 'node:buffer';
+
+import Native from '../../Native.js';
+import * as util from './util.js';
+import {
+  UnauthenticatedChatConnection,
+  Environment,
+  Net,
+  TokioAsyncContext,
+} from '../net.js';
+import { Aci } from '../Address.js';
+import { PublicKey } from '../EcKeys.js';
 import {
   ErrorCode,
   KeyTransparencyError,
   KeyTransparencyVerificationFailed,
   LibSignalErrorBase,
-} from '../Errors';
-import * as KT from '../net/KeyTransparency';
-import { MonitorMode } from '../net/KeyTransparency';
+} from '../Errors.js';
+import * as KT from '../net/KeyTransparency.js';
+import { MonitorMode } from '../net/KeyTransparency.js';
+import { InternalRequest } from './NetTest.js';
+import { newNativeHandle } from '../internal.js';
 
 use(chaiAsPromised);
 
@@ -31,18 +40,18 @@ const userAgent = 'libsignal-kt-test';
 const testAci = Aci.fromUuid('90c979fd-eab4-4a08-b6da-69dedeab9b29');
 const testIdentityKey = PublicKey.deserialize(
   Buffer.from(
-    '05111f9464c1822c6a2405acf1c5a4366679dc3349fc8eb015c8d7260e3f771177',
+    '05cdcbb178067f0ddfd258bb21d006e0aa9c7ab132d9fb5e8b027de07d947f9d0c',
     'hex'
   )
 );
 const testE164 = '+18005550100';
 const testUnidentifiedAccessKey = Buffer.from(
-  'c6f7c258c24d69538ea553b4a943c8d9',
+  '108d84b71be307bdf101e380a1d7f2a2',
   'hex'
 );
 
 const testUsernameHash = Buffer.from(
-  'd237a4b83b463ca7da58d4a16bf6a3ba104506eb412b235eb603ea10f467c655',
+  'dc711808c2cf66d5e6a33ce41f27d69d942d2e1ff4db22d39b42d2eff8d09746',
   'hex'
 );
 
@@ -84,6 +93,67 @@ describe('KeyTransparency bridging', () => {
   });
 });
 
+describe('KeyTransparency network errors', () => {
+  it('can bridge network errors', async () => {
+    async function run(statusCode: number, headers: string[] = []) {
+      const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
+      const [unauth, remote] = UnauthenticatedChatConnection.fakeConnect(
+        tokio,
+        {
+          onConnectionInterrupted: () => {},
+          onIncomingMessage: () => {},
+          onReceivedAlerts: () => {},
+          onQueueEmpty: () => {},
+        }
+      );
+      const client = new KT.ClientImpl(
+        tokio,
+        unauth._chatService,
+        Environment.Staging
+      );
+      const promise = client._getLatestDistinguished(new InMemoryKtStore(), {});
+
+      const requestFromServerWithId =
+        await Native.TESTING_FakeChatRemoteEnd_ReceiveIncomingRequest(
+          tokio,
+          remote
+        );
+      assert(requestFromServerWithId !== null);
+      const requestId = new InternalRequest(requestFromServerWithId).requestId;
+
+      const response = Native.TESTING_FakeChatResponse_Create(
+        requestId,
+        statusCode,
+        '',
+        headers,
+        null
+      );
+
+      Native.TESTING_FakeChatRemoteEnd_SendServerResponse(
+        remote,
+        newNativeHandle(response)
+      );
+      return promise;
+    }
+
+    // 429 without a retry-after header is a generic error
+    await expect(run(429)).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.IoError
+    );
+    await expect(
+      run(429, ['retry-after: 42'])
+    ).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.RateLimitedError
+    );
+    await expect(run(500)).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.IoError
+    );
+  });
+});
+
 describe('KeyTransparency Integration', function (this: Mocha.Suite) {
   // Avoid timing out due to slow network or KT environment
   this.timeout(5000);
@@ -122,12 +192,14 @@ describe('KeyTransparency Integration', function (this: Mocha.Suite) {
     await kt.search(testRequest, store, {});
 
     const accountDataHistory = store.storage.get(testAci) ?? null;
-    expect(accountDataHistory).to.not.be.null;
+    if (accountDataHistory === null) {
+      expect.fail('accountDataHistory is null');
+    }
 
-    expect(accountDataHistory!.length).to.equal(1);
+    expect(accountDataHistory.length).to.equal(1);
 
     await kt.monitor(testRequest, store, {});
-    expect(accountDataHistory!.length).to.equal(2);
+    expect(accountDataHistory.length).to.equal(2);
   });
 });
 

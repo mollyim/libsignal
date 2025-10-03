@@ -213,20 +213,6 @@ mod test {
     use crate::route::testutils::FakeContext;
     use crate::route::{DirectTcpRouteProvider, TlsRouteProvider};
 
-    #[derive(Copy, Clone, Debug, Default)]
-    struct FakeProvider;
-
-    impl RouteProvider for FakeProvider {
-        type Route = ();
-
-        fn routes<'s>(
-            &'s self,
-            _context: &impl RouteProviderContext,
-        ) -> impl Iterator<Item = Self::Route> + 's {
-            std::iter::once(())
-        }
-    }
-
     #[test]
     fn http_provider_route_order() {
         const DIRECT_TCP_PORT: NonZeroU16 = nonzero!(1234u16);
@@ -336,12 +322,12 @@ mod test {
                     inner: TlsRoute {
                         fragment: TlsRouteFragment {
                             root_certs: RootCertificates::Native,
-                            sni: Host::Domain("front-sni-2b".into()),
+                            sni: Host::Domain("front-sni-2a".into()),
                             alpn: Some(Alpn::Http1_1),
                             min_protocol_version: None,
                         },
                         inner: TcpRoute {
-                            address: UnresolvedHost("front-sni-2b".into()),
+                            address: UnresolvedHost("front-sni-2a".into()),
                             port: DEFAULT_HTTPS_PORT
                         },
                     }

@@ -3,9 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../Native';
-import * as stream from 'stream';
-import { IncrementalMacVerificationFailed, LibSignalErrorBase } from './Errors';
+import * as stream from 'node:stream';
+import { Buffer } from 'node:buffer';
+
+import Native from '../Native.js';
+import {
+  IncrementalMacVerificationFailed,
+  LibSignalErrorBase,
+} from './Errors.js';
 
 type CallbackType = (error?: Error | null) => void;
 
@@ -41,7 +46,7 @@ class DigestingWritable extends stream.Writable {
   }
 
   _write(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chunk: any,
     encoding: BufferEncoding,
     callback: CallbackType
@@ -131,7 +136,7 @@ class ValidatingWritable extends stream.Writable {
   }
 
   _write(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chunk: any,
     encoding: BufferEncoding,
     callback: CallbackType
