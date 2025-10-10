@@ -86,7 +86,7 @@ const DOMAIN_CONFIG_CHAT_DEV: DomainConfig = DomainConfig {
     ip_v4: &[ip_addr!(v4, "127.0.0.1")],
     ip_v6: &[ip_addr!(v6, "::1")],
     connect: ConnectionConfig {
-        hostname: "flatline-whisper.localhost",
+        hostname: "whisper.flatline.localhost",
         port: nonzero!(8443_u16),
         cert: LOCALHOST_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -147,7 +147,7 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_CDSI_DEV: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "flatline-cds.localhost",
+        hostname: "cds.flatline.localhost",
         port: nonzero!(8443_u16),
         cert: LOCALHOST_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -802,6 +802,7 @@ pub const DEV: Env<'static> = Env {
         },
         previous: [None, None, None],
     },
+    // FLT(uoemai): Staging configuration used as placeholder.
     keytrans_config: KEYTRANS_CONFIG_STAGING,
 };
 
