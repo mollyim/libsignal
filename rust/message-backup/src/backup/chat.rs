@@ -66,6 +66,9 @@ use view_once_message::*;
 mod voice_message;
 use voice_message::*;
 
+mod poll;
+use poll::*;
+
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ChatError {
@@ -237,6 +240,14 @@ pub enum ChatItemError {
     InvalidE164,
     /// {0}
     InvalidTimestamp(#[from] TimestampError),
+    /// invalid poll {0}
+    InvalidPoll(#[from] PollError),
+    /// poll with a destination that is not group but {0:?}
+    PollNotInGroup(DestinationKind),
+    /// poll terminate with a destination that is not group but {0:?}
+    PollTerminateNotInGroup(DestinationKind),
+    /// poll terminate not from contact or self
+    PollTerminateNotFromContact,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -286,6 +297,8 @@ pub enum InvalidExpiration {
     TooSoon(#[from] ExpirationTooSoon),
     #[error("{0}")]
     TooShort(#[from] ExpirationTooShort),
+    #[error("expiration timers are not allowed for {0}")]
+    NotAllowedForPurpose(crate::backup::Purpose),
 }
 
 /// Validated version of [`proto::Chat`].
@@ -368,6 +381,7 @@ pub enum ChatItemMessage<M: Method + ReferencedTypes> {
     GiftBadge(M::BoxedValue<GiftBadge>),
     ViewOnce(ViewOnceMessage<M::RecipientReference>),
     DirectStoryReply(DirectStoryReplyMessage<M::RecipientReference>),
+    Poll(Poll<M::RecipientReference>),
 }
 
 const CHAT_ITEM_MESSAGE_SIZE_LIMIT: usize = 200;
@@ -624,6 +638,8 @@ impl<
             .ok_or(ChatItemError::MissingItem)?
             .try_into_with(context)?;
 
+        let purpose = context.as_ref().purpose;
+
         match (&direction, &message) {
             (Direction::Directionless, ChatItemMessage::Update(_)) => Ok(()),
             (Direction::Directionless, _) => Err(ChatItemError::DirectionlessMessage),
@@ -637,6 +653,16 @@ impl<
             update.validate_author(&cached_author_kind)?;
         }
 
+        if matches!(
+            (purpose, &message),
+            (
+                crate::backup::Purpose::TakeoutExport,
+                ChatItemMessage::ViewOnce(_)
+            )
+        ) {
+            return Err(InvalidExpiration::NotAllowedForPurpose(purpose).into());
+        }
+
         if !revisions.is_empty() {
             match &message {
                 ChatItemMessage::Standard(_) | ChatItemMessage::DirectStoryReply(_) => {}
@@ -647,7 +673,8 @@ impl<
                 | ChatItemMessage::Update(_)
                 | ChatItemMessage::PaymentNotification(_)
                 | ChatItemMessage::GiftBadge(_)
-                | ChatItemMessage::ViewOnce(_) => {
+                | ChatItemMessage::ViewOnce(_)
+                | ChatItemMessage::Poll(_) => {
                     return Err(ChatItemError::NonStandardMessageHasRevisions);
                 }
             }
@@ -734,29 +761,38 @@ impl<
                 if should_have_started {
                     return Err(ChatItemError::ExpirationNotStarted);
                 }
-                if expires_in < MAX_REMOTE_BACKUP_DISAPPEARING_MESSAGE_TIME {
-                    match context.as_ref().purpose {
-                        crate::backup::Purpose::DeviceTransfer => {
-                            // For device transfer, we allow short expiring messages
-                        }
-                        crate::backup::Purpose::RemoteBackup => {
+                match purpose {
+                    crate::backup::Purpose::DeviceTransfer => {
+                        // For device transfer, we allow short expiring messages
+                    }
+                    crate::backup::Purpose::RemoteBackup => {
+                        if expires_in < MAX_REMOTE_BACKUP_DISAPPEARING_MESSAGE_TIME {
                             return Err(InvalidExpiration::TooShort(ExpirationTooShort {
                                 expiration_duration: expires_in,
                             })
                             .into());
                         }
                     }
+                    crate::backup::Purpose::TakeoutExport => {
+                        return Err(InvalidExpiration::NotAllowedForPurpose(purpose).into());
+                    }
                 }
             }
             (Some(expire_start), Some(expires_in)) => {
+                if matches!(purpose, crate::backup::Purpose::TakeoutExport) {
+                    return Err(InvalidExpiration::NotAllowedForPurpose(purpose).into());
+                }
                 let expires_at = expire_start + expires_in;
                 // Ensure that ephemeral content that's due to expire soon isn't backed up.
                 let backup_time = context.as_ref().backup_time;
                 let allowed_expire_at = backup_time
-                    + match context.as_ref().purpose {
+                    + match purpose {
                         crate::backup::Purpose::DeviceTransfer => Duration::ZERO,
                         crate::backup::Purpose::RemoteBackup => {
                             MAX_REMOTE_BACKUP_DISAPPEARING_MESSAGE_TIME
+                        }
+                        crate::backup::Purpose::TakeoutExport => {
+                            unreachable!("TakeoutExport handled above")
                         }
                     };
 
@@ -849,6 +885,11 @@ impl<M: Method + ReferencedTypes> ChatItemData<M> {
                     return Err(ChatItemError::DirectStoryReplyNotInContactThread(
                         (*recipient_data).into(),
                     ));
+                }
+            }
+            ChatItemMessage::Poll(_) => {
+                if !recipient_data.is_group() {
+                    return Err(ChatItemError::PollNotInGroup((*recipient_data).into()));
                 }
             }
         }
@@ -1051,6 +1092,7 @@ impl<
             Item::DirectStoryReplyMessage(message) => {
                 ChatItemMessage::DirectStoryReply(message.try_into_with(context)?)
             }
+            Item::Poll(poll) => ChatItemMessage::Poll(poll.try_into_with(context)?),
         })
     }
 }
@@ -1363,6 +1405,11 @@ mod test {
     #[test_case(Purpose::DeviceTransfer, 3600, Ok(()))]
     #[test_case(Purpose::RemoteBackup, 86400, Ok(()))]
     #[test_case(
+        Purpose::TakeoutExport,
+        86400,
+        Err("expiration timers are not allowed for takeout-export")
+    )]
+    #[test_case(
         Purpose::RemoteBackup,
         3600,
         Err("expires 3600s after backup creation")
@@ -1409,9 +1456,8 @@ mod test {
         );
         item.expiresInMs = Some(until_expiration_ms);
 
-        let result = item
-            .try_into_with(&TestContext(meta))
-            .map(|_: ChatItemData<Store>| ())
+        let result = TryIntoWith::<ChatItemData<Store>, _>::try_into_with(item, &TestContext(meta))
+            .map(|_| ())
             .map_err(|e| assert_matches!(e, ChatItemError::InvalidExpiration(e) => e).to_string());
         assert_eq!(result, expected.map_err(ToString::to_string));
     }
@@ -1420,6 +1466,7 @@ mod test {
     #[test_case(Purpose::DeviceTransfer, Duration::from_hours(12), Ok(()); "DeviceTransfer with short expiration")]
     #[test_case(Purpose::RemoteBackup, Duration::from_hours(25), Ok(()); "RemoteBackup with long expiration")]
     #[test_case(Purpose::DeviceTransfer, Duration::from_hours(25), Ok(()); "DeviceTransfer with long expiration")]
+    #[test_case(Purpose::TakeoutExport, Duration::from_hours(12), Err("expiration timers are not allowed for takeout-export"); "TakeoutExport short expiration")]
     fn expiring_message_timer_not_started(
         backup_purpose: Purpose,
         expiration_duration: Duration,
@@ -1450,17 +1497,46 @@ mod test {
             first_app_version: "".into(),
         };
 
-        let result = item
-            .try_into_with(&TestContext(meta))
-            .map(|_: ChatItemData<Store>| ())
-            .map_err(|e| match e {
-                ChatItemError::InvalidExpiration(InvalidExpiration::TooShort(err)) => {
-                    err.to_string()
-                }
-                _ => panic!("Unexpected error: {e:?}"),
-            });
+        let result = TryIntoWith::<ChatItemData<Store>, _>::try_into_with(item, &TestContext(meta))
+            .map(|_| ())
+            .map_err(|e| assert_matches!(e, ChatItemError::InvalidExpiration(e) => e).to_string());
 
         assert_eq!(result, expected.map_err(ToString::to_string));
+    }
+
+    #[test]
+    fn takeout_export_rejects_view_once_messages() {
+        let mut item = proto::ChatItem::test_data();
+        item.expireStartDate = None;
+        item.expiresInMs = None;
+        item.item = Some(proto::chat_item::Item::ViewOnceMessage(
+            proto::ViewOnceMessage {
+                attachment: Some(proto::MessageAttachment::test_data()).into(),
+                reactions: vec![proto::Reaction::test_data()],
+                ..Default::default()
+            },
+        ));
+
+        let meta = BackupMeta {
+            purpose: Purpose::TakeoutExport,
+            backup_time: Timestamp::test_value(),
+            media_root_backup_key: libsignal_account_keys::BackupKey(
+                [0xab; libsignal_account_keys::BACKUP_KEY_LEN],
+            ),
+            version: 0,
+            current_app_version: "libsignal-testing 0.0.2".into(),
+            first_app_version: "libsignal-testing 0.0.1".into(),
+        };
+
+        let error = TryIntoWith::<ChatItemData<Store>, _>::try_into_with(item, &TestContext(meta))
+            .expect_err("view-once message should be rejected");
+
+        assert_matches!(
+            error,
+            ChatItemError::InvalidExpiration(InvalidExpiration::NotAllowedForPurpose(
+                Purpose::TakeoutExport
+            ))
+        );
     }
 
     #[test]

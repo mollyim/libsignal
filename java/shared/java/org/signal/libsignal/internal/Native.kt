@@ -19,6 +19,7 @@ import org.signal.libsignal.protocol.state.KyberPreKeyStore
 import org.signal.libsignal.protocol.state.PreKeyStore
 import org.signal.libsignal.protocol.state.SessionStore
 import org.signal.libsignal.protocol.state.SignedPreKeyStore
+import org.signal.libsignal.protocol.util.Pair
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -339,7 +340,7 @@ internal object Native {
   @JvmStatic
   public external fun ConnectionManager_clear_proxy(connectionManager: ObjectHandle): Unit
   @JvmStatic
-  public external fun ConnectionManager_new(environment: Int, userAgent: String, remoteConfig: ObjectHandle): ObjectHandle
+  public external fun ConnectionManager_new(environment: Int, userAgent: String, remoteConfig: ObjectHandle, buildVariant: Int): ObjectHandle
   @JvmStatic
   public external fun ConnectionManager_on_network_change(connectionManager: ObjectHandle): Unit
   @JvmStatic
@@ -349,7 +350,7 @@ internal object Native {
   @JvmStatic
   public external fun ConnectionManager_set_proxy(connectionManager: ObjectHandle, proxy: ObjectHandle): Unit
   @JvmStatic
-  public external fun ConnectionManager_set_remote_config(connectionManager: ObjectHandle, remoteConfig: ObjectHandle): Unit
+  public external fun ConnectionManager_set_remote_config(connectionManager: ObjectHandle, remoteConfig: ObjectHandle, buildVariant: Int): Unit
 
   @JvmStatic
   public external fun ConnectionProxyConfig_Destroy(handle: ObjectHandle): Unit
@@ -582,8 +583,8 @@ internal object Native {
   @JvmStatic @Throws(Exception::class)
   public external fun HttpRequest_new(method: String, path: String, bodyAsSlice: ByteArray?): ObjectHandle
 
-  @JvmStatic
-  public external fun IdentityKeyPair_Deserialize(data: ByteArray): LongArray
+  @JvmStatic @Throws(Exception::class)
+  public external fun IdentityKeyPair_Deserialize(input: ByteArray): Pair<*, *>
   @JvmStatic
   public external fun IdentityKeyPair_Serialize(publicKey: ObjectHandle, privateKey: ObjectHandle): ByteArray
   @JvmStatic @Throws(Exception::class)
@@ -1157,10 +1158,10 @@ internal object Native {
   public external fun ServiceId_ServiceIdString(value: ByteArray): String
 
   @JvmStatic @Throws(Exception::class)
-  public external fun SessionBuilder_ProcessPreKeyBundle(bundle: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, now: Long, usePqRatchet: Boolean): Unit
+  public external fun SessionBuilder_ProcessPreKeyBundle(bundle: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, now: Long): Unit
 
   @JvmStatic @Throws(Exception::class)
-  public external fun SessionCipher_DecryptPreKeySignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, prekeyStore: PreKeyStore, signedPrekeyStore: SignedPreKeyStore, kyberPrekeyStore: KyberPreKeyStore, usePqRatchet: Boolean): ByteArray
+  public external fun SessionCipher_DecryptPreKeySignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, prekeyStore: PreKeyStore, signedPrekeyStore: SignedPreKeyStore, kyberPrekeyStore: KyberPreKeyStore): ByteArray
   @JvmStatic @Throws(Exception::class)
   public external fun SessionCipher_DecryptSignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore): ByteArray
   @JvmStatic @Throws(Exception::class)

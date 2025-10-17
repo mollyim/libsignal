@@ -57,6 +57,13 @@ extension TestAccount {
 final class KeyTransparencyTests: TestCaseBase {
     private let userAgent = "kt-test"
 
+    override func nonHermeticTest() throws {
+        if ProcessInfo.processInfo.environment["LIBSIGNAL_TESTING_IGNORE_KT_TESTS"] != nil {
+            throw XCTSkip("disabled via LIBSIGNAL_TESTING_IGNORE_KT_TESTS")
+        }
+        try super.nonHermeticTest()
+    }
+
     private var testAccount = TestAccount(
         aci: Aci(fromUUID: UUID(uuidString: "90c979fd-eab4-4a08-b6da-69dedeab9b29")!),
         identityKey: try! IdentityKey(
@@ -77,7 +84,7 @@ final class KeyTransparencyTests: TestCaseBase {
     func testUnknownDistinguished() async throws {
         try self.nonHermeticTest()
 
-        let net = Net(env: .staging, userAgent: userAgent)
+        let net = Net(env: .staging, userAgent: userAgent, buildVariant: .production)
         let chat = try await net.connectUnauthenticatedChat()
         chat.start(listener: NoOpListener())
 
@@ -87,7 +94,7 @@ final class KeyTransparencyTests: TestCaseBase {
     func testSearch() async throws {
         try self.nonHermeticTest()
 
-        let net = Net(env: .staging, userAgent: userAgent)
+        let net = Net(env: .staging, userAgent: userAgent, buildVariant: .production)
         let chat = try await net.connectUnauthenticatedChat()
         chat.start(listener: NoOpListener())
         let store = TestStore()
@@ -106,7 +113,7 @@ final class KeyTransparencyTests: TestCaseBase {
     func testMonitor() async throws {
         try self.nonHermeticTest()
 
-        let net = Net(env: .staging, userAgent: userAgent)
+        let net = Net(env: .staging, userAgent: userAgent, buildVariant: .production)
         let chat = try await net.connectUnauthenticatedChat()
         chat.start(listener: NoOpListener())
         let store = TestStore()

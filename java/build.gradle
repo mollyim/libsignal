@@ -20,13 +20,15 @@ repositories {
 }
 
 allprojects {
-    version = "0.82.1"
-    group   = "im.molly"
+    version = "0.84.0"
+    group   = "org.signal"
 
     def overrideVersion = System.getenv("OVERRIDE_VERSION")
     if (overrideVersion) {
         version = overrideVersion.replaceFirst(/^v/, '')
     }
+
+    group = "im.molly"
 
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
