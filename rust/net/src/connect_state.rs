@@ -674,14 +674,8 @@ pub type PreconnectingFactory<Inner = DefaultConnectorFactory> =
     libsignal_net_infra::route::PreconnectingFactory<TransportRoute, Inner>;
 
 pub fn infer_proxy_mode_for_config(config: ConnectionProxyConfig) -> DirectOrProxyMode {
-    if config.is_signal_transparent_proxy() {
-        // This was configured in the app, we should take it as a requirement.
-        DirectOrProxyMode::ProxyOnly(config)
-    } else {
-        // This was set at the system level or provided as an environment variable, it may not have
-        // been intended to apply to Signal.
-        DirectOrProxyMode::ProxyThenDirect(config)
-    }
+    // MOLLY: Always enforce proxy-only mode.
+    DirectOrProxyMode::ProxyOnly(config)
 }
 
 #[cfg(test)]
