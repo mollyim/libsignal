@@ -19,5 +19,5 @@ pub const PROXY_G_ROOT_CERTIFICATES: RootCertificates = RootCertificates::FromSt
     include_bytes!("../res/GTSR4.cer"),
 ]);
 
-pub const LOCALHOST_DEV_CERTIFICATE: RootCertificates =
-    RootCertificates::FromStaticDers(&[include_bytes!("../res/localhost.cer")]);
+pub const INTERNAL_DEV_CERTIFICATE: RootCertificates =
+    RootCertificates::FromStaticDers(&[include_bytes!("../res/internal.cer")]);

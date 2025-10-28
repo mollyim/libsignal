@@ -28,7 +28,7 @@ use nonzero_ext::nonzero;
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 
-use crate::certs::{PROXY_G_ROOT_CERTIFICATES, SIGNAL_ROOT_CERTIFICATES, LOCALHOST_DEV_CERTIFICATE};
+use crate::certs::{PROXY_G_ROOT_CERTIFICATES, SIGNAL_ROOT_CERTIFICATES, INTERNAL_DEV_CERTIFICATE};
 use crate::chat::RECOMMENDED_CHAT_WS_CONFIG;
 use crate::enclave::{Cdsi, EnclaveEndpoint, EndpointParams, MrEnclave, SvrSgx};
 
@@ -86,9 +86,9 @@ const DOMAIN_CONFIG_CHAT_DEV: DomainConfig = DomainConfig {
     ip_v4: &[ip_addr!(v4, "127.0.0.1")],
     ip_v6: &[ip_addr!(v6, "::1")],
     connect: ConnectionConfig {
-        hostname: "whisper.flatline.localhost",
+        hostname: "whisper.flatline.internal",
         port: nonzero!(8443_u16),
-        cert: LOCALHOST_DEV_CERTIFICATE,
+        cert: INTERNAL_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
         proxy: None,
@@ -147,9 +147,9 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_CDSI_DEV: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "cds.flatline.localhost",
+        hostname: "cds.flatline.internal",
         port: nonzero!(8443_u16),
-        cert: LOCALHOST_DEV_CERTIFICATE,
+        cert: INTERNAL_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: None,
         proxy: None,
@@ -194,7 +194,7 @@ const DOMAIN_CONFIG_SVR2_DEV: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
         hostname: "invalid",
         port: DEFAULT_HTTPS_PORT,
-        cert: LOCALHOST_DEV_CERTIFICATE,
+        cert: INTERNAL_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: None,
         proxy: None,
@@ -239,7 +239,7 @@ const DOMAIN_CONFIG_SVRB_DEV: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
         hostname: "invalid",
         port: DEFAULT_HTTPS_PORT,
-        cert: LOCALHOST_DEV_CERTIFICATE,
+        cert: INTERNAL_DEV_CERTIFICATE,
         min_tls_version: Some(SslVersion::TLS1_3),
         confirmation_header_name: None,
         proxy: None,
