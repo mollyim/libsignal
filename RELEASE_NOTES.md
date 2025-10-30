@@ -1,7 +1,7 @@
-v0.84.0
+v0.85.1
 
-- keytrans: Verify signatures from all auditors
+- Backups / SVRB - add support for multiple SVRB backends when new enclaves need to roll out.
 
-- Java: Fixed `IdentityKeyPair(byte[])` to correctly declare that it throws InvalidKeyException.
+- Typed APIs: `UnauthUsernamesService.lookUpUsernameLink` has been added.
 
-- Node: Add BackupsJsonExporter, to convert Backup proto objects to human-readable JSON for export.
+- Backup validator: count grapheme clusters instead of characters in poll strings.
