@@ -226,6 +226,8 @@ impl Visit<Scrambler> for proto::AccountData {
             accountSettings,
             backupsSubscriberData,
             svrPin,
+            bioText,
+            bioEmoji,
             special_fields: _,
             androidSpecificSettings: _,
         } = self;
@@ -244,6 +246,10 @@ impl Visit<Scrambler> for proto::AccountData {
         accountSettings.accept(visitor);
         backupsSubscriberData.accept(visitor);
         svrPin.randomize(&mut visitor.rng);
+        bioText.randomize(&mut visitor.rng);
+        if !bioEmoji.is_empty() {
+            *bioEmoji = REPLACEMENT_EMOJI.to_string();
+        }
     }
 }
 
@@ -297,11 +303,13 @@ impl Visit<Scrambler> for proto::account_data::AccountSettings {
             customChatColors,
             optimizeOnDeviceStorage: _,
             backupTier: _,
-            special_fields: _,
-            showSealedSenderIndicators: _,
+            appTheme: _,
+            callsUseLessDataSetting: _,
             defaultSentMediaQuality: _,
             autoDownloadSettings: _,
             screenLockTimeoutMinutes: _,
+            pinReminders: _,
+            special_fields: _,
         } = self;
 
         defaultChatStyle.accept(visitor);

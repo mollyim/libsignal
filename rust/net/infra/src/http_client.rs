@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-use std::sync::Arc;
+use std::error::Error;
+use std::marker::PhantomData;
+use std::str::FromStr as _;
 
 use bytes::Bytes;
+use derive_where::derive_where;
 use http::HeaderMap;
 use http::response::Parts;
 use http::uri::PathAndQuery;
@@ -15,7 +18,7 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use static_assertions::assert_impl_all;
 
 use crate::errors::{LogSafeDisplay, TransportConnectError};
-use crate::route::{Connector, HttpRouteFragment, HttpsTlsRoute};
+use crate::route::{Connector, HttpRouteFragment};
 use crate::{AsyncDuplexStream, Connection};
 
 #[derive(displaydoc::Display, Debug)]
@@ -38,29 +41,105 @@ pub enum HttpError {
     ResponseTooLarge,
 }
 
+/// A wrapper around hyper's [`SendRequest`](http2::SendRequest) that supports a prepended path
+/// prefix and consistent host.
+///
+/// Created using [`Http2Connector`].
+///
+/// When `tower-service` is enabled, `Http2Client` can be used as a [`tower_service::Service`].
+#[derive(Debug)]
+#[derive_where(Clone)]
+pub struct Http2Client<B> {
+    service: http2::SendRequest<B>,
+    authority: http::uri::Authority,
+    path_prefix: Option<http::uri::PathAndQuery>,
+}
+
+impl<B: hyper::body::Body + 'static> Http2Client<B> {
+    #[cfg(feature = "tower-service")]
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), hyper::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    async fn ready(&mut self) -> Result<(), hyper::Error> {
+        self.service.ready().await
+    }
+
+    fn send_request(
+        &mut self,
+        mut req: http::Request<B>,
+    ) -> impl Future<Output = Result<http::Response<hyper::body::Incoming>, hyper::Error>> + 'static
+    {
+        let mut uri = std::mem::take(req.uri_mut()).into_parts();
+        uri.authority = Some(self.authority.clone());
+        uri.scheme = Some(http::uri::Scheme::HTTPS);
+        if let Some(prefix) = self.path_prefix.as_ref() {
+            uri.path_and_query = Some(
+                http::uri::PathAndQuery::from_str(&format!(
+                    "{}{}",
+                    prefix,
+                    uri.path_and_query.as_ref().map_or("", |path| path.as_str())
+                ))
+                .expect("valid path prefix"),
+            );
+        }
+        *req.uri_mut() = http::Uri::from_parts(uri).expect("valid parts");
+
+        self.service.send_request(req)
+    }
+}
+
+#[cfg(feature = "tower-service")]
+impl<B: hyper::body::Body + Send + 'static> tower_service::Service<http::Request<B>>
+    for Http2Client<B>
+{
+    type Response = http::Response<hyper::body::Incoming>;
+    type Error = hyper::Error;
+    type Future = futures_util::future::BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        Box::pin(self.send_request(req))
+    }
+}
+
+/// An [Http2Client] that always makes requests all at once, as opposed to streaming either request
+/// or response bodies.
+///
+/// Convenient for one-off or ad-hoc requests.
 #[derive(Debug, Clone)]
 pub struct AggregatingHttp2Client {
-    service: http2::SendRequest<Full<Bytes>>,
-    http_host: Arc<str>,
+    service: Http2Client<Full<Bytes>>,
     max_response_size: usize,
-    path_prefix: Arc<str>,
 }
 
 impl AggregatingHttp2Client {
+    pub fn new(service: Http2Client<Full<Bytes>>, max_response_size: usize) -> Self {
+        Self {
+            service,
+            max_response_size,
+        }
+    }
+
     pub async fn send_request_aggregate_response(
-        &self,
+        &mut self,
         path_and_query: PathAndQuery,
         method: http::Method,
         headers: HeaderMap,
         body: Bytes,
     ) -> Result<(Parts, Bytes), HttpError> {
-        let uri = format!(
-            "https://{}{}{}",
-            self.http_host, self.path_prefix, path_and_query
-        );
         let mut request_builder = http::Request::builder()
             .method(method)
-            .uri(uri)
+            .uri(http::Uri::from(path_and_query))
             .version(http::Version::HTTP_2);
 
         request_builder
@@ -75,9 +154,12 @@ impl AggregatingHttp2Client {
             .body(Full::new(body))
             .map_err(|_| HttpError::FailedToCreateRequest)?;
 
+        self.service
+            .ready()
+            .await
+            .map_err(|_| HttpError::SendRequestError)?;
         let res = self
             .service
-            .clone()
             .send_request(request)
             .await
             .map_err(|_| HttpError::SendRequestError)?;
@@ -113,57 +195,61 @@ impl AggregatingHttp2Client {
         Ok((parts, content))
     }
 }
-pub(crate) struct Http2Connector<C> {
-    pub inner: C,
-    pub max_response_size: usize,
+
+pub struct Http2Connector<B = Full<Bytes>> {
+    request_body: PhantomData<fn(B)>,
 }
 
-#[derive(derive_more::From, displaydoc::Display)]
-pub(crate) enum HttpConnectError {
+impl<B> Http2Connector<B> {
+    // More parameters are coming soon.
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            request_body: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error, displaydoc::Display)]
+pub enum HttpConnectError {
     /// {0}
     Transport(#[from] TransportConnectError),
     /// HTTP handshake failed
     HttpHandshake,
+    /// {0}
+    InvalidConfig(&'static str),
 }
 
 assert_impl_all!(TransportConnectError: LogSafeDisplay);
 impl LogSafeDisplay for HttpConnectError {}
 
-impl<T, C, Inner> Connector<HttpsTlsRoute<T>, Inner> for Http2Connector<C>
+impl<B, Inner> Connector<HttpRouteFragment, Inner> for Http2Connector<B>
 where
-    C: Connector<
-            T,
-            Inner,
-            Connection: Connection + Send + AsyncDuplexStream + 'static,
-            Error = TransportConnectError,
-        > + Sync,
-    Inner: Send,
-    T: Send,
+    Inner: Connection + AsyncDuplexStream + Send + 'static,
+    B: hyper::body::Body<Data: Send, Error: Into<Box<dyn Error + Send + Sync>>>
+        + Send
+        + Unpin
+        + 'static,
 {
-    type Connection = AggregatingHttp2Client;
-
+    type Connection = Http2Client<B>;
     type Error = HttpConnectError;
 
     async fn connect_over(
         &self,
         over: Inner,
-        route: HttpsTlsRoute<T>,
+        route: HttpRouteFragment,
         log_tag: &str,
     ) -> Result<Self::Connection, Self::Error> {
-        let HttpsTlsRoute {
-            fragment:
-                HttpRouteFragment {
-                    host_header,
-                    path_prefix,
-                    front_name: _,
-                },
-            inner: tls_target,
+        let HttpRouteFragment {
+            host_header,
+            path_prefix,
+            front_name: _,
         } = route;
 
-        let ssl_stream = self.inner.connect_over(over, tls_target, log_tag).await?;
-        let info = ssl_stream.transport_info();
-        let io = TokioIo::new(ssl_stream);
-        let (sender, connection) = http2::handshake::<_, _, Full<Bytes>>(TokioExecutor::new(), io)
+        let info = over.transport_info();
+        let io = TokioIo::new(over);
+        let (sender, connection) = http2::Builder::new(TokioExecutor::new())
+            .handshake::<_, B>(io)
             .await
             .map_err(|_: hyper::Error| HttpConnectError::HttpHandshake)?;
 
@@ -181,11 +267,21 @@ where
             }
         });
 
-        Ok(AggregatingHttp2Client {
+        let authority = http::uri::Authority::from_str(&host_header)
+            .map_err(|_| HttpConnectError::InvalidConfig("invalid host"))?;
+        let path_prefix = if path_prefix.is_empty() {
+            None
+        } else {
+            Some(
+                http::uri::PathAndQuery::from_str(&path_prefix)
+                    .map_err(|_| HttpConnectError::InvalidConfig("invalid path prefix"))?,
+            )
+        };
+
+        Ok(Http2Client {
             service: sender,
-            http_host: host_header,
+            authority,
             path_prefix,
-            max_response_size: self.max_response_size,
         })
     }
 }
@@ -197,17 +293,19 @@ mod test {
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::num::NonZeroU16;
     use std::ops::ControlFlow;
+    use std::sync::Arc;
     use std::time::{Duration, SystemTime};
 
     use assert_matches::assert_matches;
     use http::{HeaderName, HeaderValue, Method, StatusCode};
+    use test_case::test_matrix;
     use warp::Filter as _;
 
     use super::*;
     use crate::host::Host;
     use crate::route::{
-        ConnectError, ConnectionOutcomeParams, ConnectionOutcomes, TcpRoute, ThrottlingConnector,
-        TlsRoute, TlsRouteFragment,
+        ComposedConnector, ConnectError, ConnectionOutcomeParams, ConnectionOutcomes,
+        HttpsTlsRoute, TcpRoute, ThrottlingConnector, TlsRoute, TlsRouteFragment,
     };
     use crate::tcp_ssl::testutil::{SERVER_CERTIFICATE, SERVER_HOSTNAME, localhost_https_server};
 
@@ -275,14 +373,11 @@ mod test {
         log_tag: &str,
     ) -> Result<AggregatingHttp2Client, HttpError> {
         let mut outcome_record_snapshot = outcome_record.read().await.clone();
-        let tls_connector = crate::route::ComposedConnector::new(
+        let tls_connector = ComposedConnector::new(
             ThrottlingConnector::new(crate::tcp_ssl::StatelessTls, 1),
             crate::tcp_ssl::StatelessTcp,
         );
-        let connector = Http2Connector {
-            inner: tls_connector,
-            max_response_size,
-        };
+        let connector = ComposedConnector::new(Http2Connector::new(), tls_connector);
         let (result, updates) = crate::route::connect_resolved(
             targets.into_iter().collect(),
             &mut outcome_record_snapshot,
@@ -300,6 +395,9 @@ mod test {
                 HttpConnectError::HttpHandshake => {
                     ControlFlow::Break(HttpError::Http2HandshakeFailed)
                 }
+                HttpConnectError::InvalidConfig(_) => {
+                    ControlFlow::Break(HttpError::FailedToCreateRequest)
+                }
             },
         )
         .await;
@@ -310,16 +408,20 @@ mod test {
             SystemTime::now(),
         );
 
-        result.map_err(|e| match e {
-            ConnectError::AllAttemptsFailed | ConnectError::NoResolvedRoutes => {
-                HttpError::SslHandshakeFailed
-            }
-            ConnectError::FatalConnect(e) => e,
-        })
+        Ok(AggregatingHttp2Client::new(
+            result.map_err(|e| match e {
+                ConnectError::AllAttemptsFailed | ConnectError::NoResolvedRoutes => {
+                    HttpError::SslHandshakeFailed
+                }
+                ConnectError::FatalConnect(e) => e,
+            })?,
+            max_response_size,
+        ))
     }
 
+    #[test_matrix(["", "/prefix"])]
     #[tokio::test]
-    async fn http_client_e2e_test() {
+    async fn http_client_e2e_test(prefix: &'static str) {
         let _ = env_logger::try_init();
         let (request_info_send, request_info_recv) = std::sync::mpsc::channel();
 
@@ -329,11 +431,11 @@ mod test {
         const FAKE_HOSTNAME: &str = "different-from-sni.test-hostname";
 
         let host = FAKE_HOSTNAME.into();
-        let client = http2_client(
+        let mut client = http2_client(
             [HttpsTlsRoute {
                 fragment: HttpRouteFragment {
                     host_header: Arc::clone(&host),
-                    path_prefix: "".into(),
+                    path_prefix: prefix.into(),
                     front_name: None,
                 },
                 inner: TlsRoute {
@@ -382,7 +484,7 @@ mod test {
                     .map(|(n, v)| (n.parse().unwrap(), v.parse().unwrap()))
             )
         );
-        assert_eq!(last_request.path.as_str(), "/request/path");
+        assert_eq!(last_request.path.as_str(), format!("{prefix}/request/path"));
 
         assert_eq!(response_parts.status, StatusCode::OK);
         assert_eq!(
@@ -406,7 +508,7 @@ mod test {
 
         const INVALID_HOSTNAME: &str = "invalid hostname &&?";
         let host_header = INVALID_HOSTNAME.into();
-        let client = http2_client(
+        let err = http2_client(
             [HttpsTlsRoute {
                 fragment: HttpRouteFragment {
                     host_header,
@@ -433,20 +535,8 @@ mod test {
             "test",
         )
         .await
-        .expect("can connect");
+        .expect_err("hostname checked here");
 
-        let result = client
-            .send_request_aggregate_response(
-                "/request/path".parse().unwrap(),
-                Method::POST,
-                HeaderMap::from_iter([(
-                    HeaderName::from_static("test-header"),
-                    HeaderValue::from_static("test-value"),
-                )]),
-                Bytes::new(),
-            )
-            .await;
-
-        assert_matches!(result, Err(HttpError::FailedToCreateRequest));
+        assert_matches!(err, HttpError::FailedToCreateRequest);
     }
 }
