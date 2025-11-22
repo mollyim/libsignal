@@ -4,10 +4,10 @@ LABEL authors="mollyim"
 # Install essential tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      git=1:2.43.0-1ubuntu7.3 \
-      python3=3.12.3-0ubuntu2 \
-      unzip=6.0-28ubuntu4.1 \
-      rustup=1.26.0-5build1 \
+      git \
+      python3 \
+      unzip \
+      rustup \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Android SDK
