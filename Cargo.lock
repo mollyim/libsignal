@@ -741,11 +741,11 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "core-models"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94950e87ea550d6d68f1993f3e7bebc8cb7235157bff84337d46195c3aa0b3f0"
+checksum = "0940496e5c83c54f3b753d5317daec82e8edac71c33aaa1f666d76f518de2444"
 dependencies = [
- "hax-lib 0.3.4",
+ "hax-lib 0.3.5",
  "pastey",
  "rand 0.9.2",
 ]
@@ -1544,11 +1544,11 @@ dependencies = [
 
 [[package]]
 name = "hax-lib"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bf40682e31dc3961209a4657f6fe7c412879b59f212bac3d14bd7ece5af76a3"
+checksum = "74d9ba66d1739c68e0219b2b2238b5c4145f491ebf181b9c6ab561a19352ae86"
 dependencies = [
- "hax-lib-macros 0.3.4",
+ "hax-lib-macros 0.3.5",
  "num-bigint",
  "num-traits",
 ]
@@ -1569,11 +1569,11 @@ dependencies = [
 
 [[package]]
 name = "hax-lib-macros"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e33a5a4ff169bcc4e9189f4bace3ed22d03fcd8e52eee90a00b7b1e2621cb490"
+checksum = "24ba777a231a58d1bce1d68313fa6b6afcc7966adef23d60f45b8a2b9b688bf1"
 dependencies = [
- "hax-lib-macros-types 0.3.4",
+ "hax-lib-macros-types 0.3.5",
  "proc-macro-error2",
  "proc-macro2",
  "quote",
@@ -1595,9 +1595,9 @@ dependencies = [
 
 [[package]]
 name = "hax-lib-macros-types"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a39dc59c01c2eec9bce75698c4f9ca01d11759ace2a28e1691b66fb0008c6a21"
+checksum = "867e19177d7425140b417cd27c2e05320e727ee682e98368f88b7194e80ad515"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1704,12 +1704,12 @@ dependencies = [
 
 [[package]]
 name = "hpke-rs"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36874953dfe0223fd877a77b0eefcd84f8da36161b446c6fcb47b8311fa0251a"
+checksum = "f0d131cd4e00b0d03bee8a120828a374474511ec1a713f2bdf2fa5528dc92b32"
 dependencies = [
  "hpke-rs-crypto",
- "libcrux-sha3 0.0.3",
+ "libcrux-sha3 0.0.4",
  "log",
  "rand_core 0.9.3",
  "zeroize",
@@ -2109,17 +2109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json5"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1"
-dependencies = [
- "pest",
- "pest_derive",
- "serde",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2172,12 +2161,12 @@ dependencies = [
 
 [[package]]
 name = "libcrux-intrinsics"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d3b41dcbc21a5fb7efbbb5af7405b2e79c4bfe443924e90b13afc0080318d31"
+checksum = "bc9ee7ef66569dd7516454fe26de4e401c0c62073929803486b96744594b9632"
 dependencies = [
  "core-models",
- "hax-lib 0.3.4",
+ "hax-lib 0.3.5",
 ]
 
 [[package]]
@@ -2212,6 +2201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "libcrux-secrets"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e4dbbf6bc9f2bc0f20dc3bea3e5c99adff3bdccf6d2a40488963da69e2ec307"
+dependencies = [
+ "hax-lib 0.3.5",
+]
+
+[[package]]
 name = "libcrux-sha2"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2219,7 +2217,7 @@ checksum = "412cf855804ed65212e3d61983d500cea8b9259eff35bb6f8bf03aaf0ac19fbc"
 dependencies = [
  "libcrux-hacl-rs",
  "libcrux-macros",
- "libcrux-traits",
+ "libcrux-traits 0.0.2",
 ]
 
 [[package]]
@@ -2235,13 +2233,14 @@ dependencies = [
 
 [[package]]
 name = "libcrux-sha3"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29d95de4257eafdfaf3bffecadb615219b0ca920c553722b3646d32dde76c797"
+checksum = "2400bec764d1c75b8a496d5747cffe32f1fb864a12577f0aca2f55a92021c962"
 dependencies = [
- "hax-lib 0.3.4",
- "libcrux-intrinsics 0.0.3",
+ "hax-lib 0.3.5",
+ "libcrux-intrinsics 0.0.4",
  "libcrux-platform",
+ "libcrux-traits 0.0.4",
 ]
 
 [[package]]
@@ -2250,6 +2249,16 @@ version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50c487a3fb34361f4f78a9c9dc5eff4ae62ef3ccb69a916af7b524dd288de9db"
 dependencies = [
+ "rand 0.9.2",
+]
+
+[[package]]
+name = "libcrux-traits"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9adfd58e79d860f6b9e40e35127bfae9e5bd3ade33201d1347459011a2add034"
+dependencies = [
+ "libcrux-secrets",
  "rand 0.9.2",
 ]
 
@@ -2476,7 +2485,7 @@ dependencies = [
 
 [[package]]
 name = "libsignal-ffi"
-version = "0.86.4"
+version = "0.86.6"
 dependencies = [
  "cpufeatures",
  "hex",
@@ -2496,14 +2505,14 @@ dependencies = [
 
 [[package]]
 name = "libsignal-jni"
-version = "0.86.4"
+version = "0.86.6"
 dependencies = [
  "libsignal-jni-impl",
 ]
 
 [[package]]
 name = "libsignal-jni-impl"
-version = "0.86.4"
+version = "0.86.6"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -2520,7 +2529,7 @@ dependencies = [
 
 [[package]]
 name = "libsignal-jni-testing"
-version = "0.86.4"
+version = "0.86.6"
 dependencies = [
  "jni",
  "libsignal-bridge-testing",
@@ -2577,7 +2586,6 @@ dependencies = [
  "hmac",
  "intmap",
  "itertools 0.14.0",
- "json5",
  "libsignal-account-keys",
  "libsignal-cli-utils",
  "libsignal-core",
@@ -2598,6 +2606,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "serde_json",
+ "serde_json5",
  "serde_with",
  "sha2",
  "signal-crypto",
@@ -2687,6 +2696,7 @@ dependencies = [
  "tokio-boring",
  "tokio-stream",
  "tokio-tungstenite",
+ "tonic",
  "tungstenite",
  "url",
  "uuid",
@@ -2823,7 +2833,7 @@ dependencies = [
 
 [[package]]
 name = "libsignal-node"
-version = "0.86.4"
+version = "0.86.6"
 dependencies = [
  "cmake",
  "futures",
@@ -4429,6 +4439,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_json5"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d34d03f54462862f2a42918391c9526337f53171eaa4d8894562be7f252edd3"
+dependencies = [
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4696,7 +4717,7 @@ dependencies = [
  "cpufeatures",
  "curve25519-dalek",
  "displaydoc",
- "hax-lib 0.3.4",
+ "hax-lib 0.3.5",
  "hkdf",
  "libcrux-hkdf",
  "libcrux-hmac",
@@ -5247,12 +5268,11 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tungstenite"
 version = "0.27.0"
-source = "git+https://github.com/signalapp/tungstenite-rs?tag=signal-v0.27.0#d9409e3622ff867e7cf77e864be95487113ae499"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eadc29d668c91fcc564941132e17b28a7ceb2f3ebf0b9dae3e03fd7a6748eb0d"
 dependencies = [
  "bytes",
  "data-encoding",
- "flate2",
- "headers",
  "http",
  "httparse",
  "log",

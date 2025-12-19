@@ -12,8 +12,7 @@ use futures_util::Stream;
 use futures_util::stream::StreamExt as _;
 use itertools::Itertools as _;
 use libsignal_net::chat::{
-    self, ChatConnection, EnablePermessageDeflate, PendingChatConnection,
-    RECOMMENDED_CHAT_WS_CONFIG,
+    self, ChatConnection, PendingChatConnection, RECOMMENDED_CHAT_WS_CONFIG,
 };
 use libsignal_net::connect_state::{
     ConnectState, ConnectionResources, DefaultConnectorFactory, DefaultTransportConnector,
@@ -29,6 +28,7 @@ pub use libsignal_net::infra::testutil::fake_transport::FakeTransportTarget;
 use libsignal_net::infra::{AsyncDuplexStream, EnableDomainFronting};
 use libsignal_net_infra::route::{Connector, TransportRoute, UsePreconnect};
 use libsignal_net_infra::utils::no_network_change_events;
+use libsignal_net_infra::ws::WebSocketTransportStream;
 use tokio::time::Duration;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::Filter as _;
@@ -44,7 +44,10 @@ mod connector;
 pub use connector::{FakeTransportConnector, TransportConnectEvent, TransportConnectEventStage};
 
 /// Convenience alias for a dynamically-dispatched stream.
-pub type FakeStream = Box<dyn AsyncDuplexStream>;
+///
+/// We use this for streams other than websocket transports, but [`WebSocketTransportStream`] is
+/// still a handy *maximal* set of requirements.
+pub type FakeStream = Box<dyn WebSocketTransportStream>;
 
 /// Produces an iterator with just direct routes (without chaining domain fronted routes).
 pub fn only_direct_routes(
@@ -60,6 +63,7 @@ pub fn only_direct_routes(
                 hostname,
                 cert: _,
                 min_tls_version: _,
+                http_version: _,
                 confirmation_header_name: _,
                 proxy: _,
             },
@@ -105,6 +109,7 @@ pub fn allow_domain_fronting(
                 hostname: _,
                 cert: _,
                 min_tls_version: _,
+                http_version: _,
                 confirmation_header_name: _,
                 proxy,
             },
@@ -193,9 +198,7 @@ impl FakeDeps {
         &self.resolved_names
     }
 
-    pub async fn connect_chat(
-        &self,
-    ) -> Result<PendingChatConnection<impl AsyncDuplexStream>, chat::ConnectError> {
+    pub async fn connect_chat(&self) -> Result<PendingChatConnection, chat::ConnectError> {
         let Self {
             connect_state,
             dns_resolver,
@@ -219,7 +222,6 @@ impl FakeDeps {
             ),
             &UserAgent::with_libsignal_version("test"),
             RECOMMENDED_CHAT_WS_CONFIG,
-            EnablePermessageDeflate::No,
             None,
             "fake chat",
         )

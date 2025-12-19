@@ -52,6 +52,7 @@ const DOMAIN_CONFIG_CHAT: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/service",
@@ -74,6 +75,7 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/service-staging",
@@ -88,6 +90,7 @@ const DOMAIN_CONFIG_CDSI: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/cdsi",
@@ -104,6 +107,7 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/cdsi-staging",
@@ -120,6 +124,7 @@ const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svr2",
@@ -135,7 +140,15 @@ const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
         ip_addr!(v4, "20.65.43.198"),
         ip_addr!(v4, "13.84.216.212"),
     ],
-    ip_v6: &[],
+    ip_v6: &[
+        ip_addr!(v6, "2603:1030:20e:33::6"),
+        ip_addr!(v6, "2603:1030:408:3::1d"),
+        ip_addr!(v6, "2603:1030:b:2a::12"),
+        ip_addr!(v6, "2603:1030:803:4::65"),
+        ip_addr!(v6, "2a01:111:f100:3000::a83e:1208"),
+        ip_addr!(v6, "2603:1030:c04:1e::31c"),
+        ip_addr!(v6, "2603:1030:f00::17"),
+    ],
 };
 
 const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
@@ -144,6 +157,7 @@ const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svr2-staging",
@@ -157,7 +171,13 @@ const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
         ip_addr!(v4, "20.127.86.118"),
         ip_addr!(v4, "20.186.175.196"),
     ],
-    ip_v6: &[],
+    ip_v6: &[
+        ip_addr!(v6, "2603:1030:20e:31::20e"),
+        ip_addr!(v6, "2603:1030:403:29::7f"),
+        ip_addr!(v6, "2603:1030:b:2c::26"),
+        ip_addr!(v6, "2603:1030:800:5::bfee:ab23"),
+        ip_addr!(v6, "2603:1030:a04:16::3a"),
+    ],
 };
 
 const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
@@ -166,6 +186,7 @@ const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svrb-staging",
@@ -179,7 +200,13 @@ const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
         ip_addr!(v4, "20.66.46.240"),
         ip_addr!(v4, "172.178.57.240"),
     ],
-    ip_v6: &[],
+    ip_v6: &[
+        ip_addr!(v6, "2a01:111:f100:2004::8975:6ea4"),
+        ip_addr!(v6, "2603:1030:408:7::31"),
+        ip_addr!(v6, "2603:1030:b:29::8f"),
+        ip_addr!(v6, "2603:1030:800:5::bfee:ab24"),
+        ip_addr!(v6, "2603:1030:a04:26::82"),
+    ],
 };
 
 const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
@@ -188,6 +215,7 @@ const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svrb",
@@ -203,7 +231,15 @@ const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
         ip_addr!(v4, "20.66.41.177"),
         ip_addr!(v4, "20.114.45.6"),
     ],
-    ip_v6: &[],
+    ip_v6: &[
+        ip_addr!(v6, "2603:1030:20c:6::166"),
+        ip_addr!(v6, "2603:1030:408:6::e5"),
+        ip_addr!(v6, "2603:1030:7:5::22"),
+        ip_addr!(v6, "2a01:111:f100:4001::4625:a047"),
+        ip_addr!(v6, "2a01:111:f100:3000::a83e:14da"),
+        ip_addr!(v6, "2603:1030:c02:5::632"),
+        ip_addr!(v6, "2603:1030:f00:3::27"),
+    ],
 };
 
 pub const PROXY_CONFIG_F_PROD: ProxyConfig = ProxyConfig {
@@ -324,6 +360,10 @@ pub struct ConnectionConfig {
     pub cert: RootCertificates,
     /// Which minimum version of TLS to require when connecting to the resource.
     pub min_tls_version: Option<SslVersion>,
+    /// Which version of HTTP to expect when connecting to the resource.
+    ///
+    /// This may be `None` for a non-HTTP resource.
+    pub http_version: Option<HttpVersion>,
     /// A header to look for that indicates that the resource was reached.
     ///
     /// If this is `Some()`, then the presence of the header in an HTTP response
@@ -439,6 +479,7 @@ impl ConnectionConfig {
             port,
             cert,
             min_tls_version,
+            http_version,
             confirmation_header_name: _,
             proxy,
         } = self;
@@ -481,7 +522,7 @@ impl ConnectionConfig {
 
         HttpsProvider::new(
             Arc::clone(&hostname),
-            HttpVersion::Http1_1,
+            http_version.expect("must have an HTTP version to connect to an HTTP resource"),
             DomainFrontRouteProvider::new(HttpVersion::Http1_1, domain_front_configs),
             TlsRouteProvider::new(
                 cert.clone(),
@@ -823,6 +864,7 @@ mod test {
             port: PORT,
             cert: RootCertificates::Native,
             min_tls_version: Some(SslVersion::TLS1_2),
+            http_version: Some(HttpVersion::Http1_1),
             confirmation_header_name: None,
             proxy: Some(ConnectionProxyConfig {
                 path_prefix: "proxy-prefix",
@@ -853,6 +895,7 @@ mod test {
             fragment: HttpRouteFragment {
                 host_header: "host".into(),
                 path_prefix: "".into(),
+                http_version: Some(HttpVersion::Http1_1),
                 front_name: None,
             },
             inner: TlsRoute {
