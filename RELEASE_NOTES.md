@@ -1,5 +1,5 @@
-v0.86.12
+v0.86.14
 
-- Adds the "useH2ForUnauthChat" remote config, for experimenting with running unauthenticated chat connections over H2.
-
-- Update to latest libcrux-ml-kem and spqr crates, addressing https://github.com/signalapp/libsignal/issues/641. Thank you to @GuuJiang for investigating and helping fix this issue!
+- TypeScript: Fix accidentally-lax typing for the non-deprecated overload of `Net.setRemoteConfig`.
+- Upgrade MSRV to 1.88
+- Backup validator: validate group member labels
