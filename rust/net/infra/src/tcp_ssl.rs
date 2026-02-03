@@ -18,7 +18,7 @@ use crate::route::{Connector, DirectOrProxyMode, TcpRoute, TlsRouteFragment};
 #[cfg(feature = "dev-util")]
 #[allow(unused_imports)]
 use crate::utils::development_only_enable_nss_standard_debug_interop;
-use crate::{Alpn, AsyncDuplexStream, Connection};
+use crate::{Alpn, AsyncDuplexStream, Connection, OverrideNagleAlgorithm};
 
 pub mod proxy;
 
@@ -95,7 +95,11 @@ impl Connector<TcpRoute<IpAddr>, ()> for StatelessTcp {
         route: TcpRoute<IpAddr>,
         log_tag: &str,
     ) -> impl Future<Output = Result<Self::Connection, Self::Error>> {
-        let TcpRoute { address, port } = route;
+        let TcpRoute {
+            address,
+            port,
+            override_nagle_algorithm,
+        } = route;
 
         async move {
             let start = tokio::time::Instant::now();
@@ -106,7 +110,7 @@ impl Connector<TcpRoute<IpAddr>, ()> for StatelessTcp {
             .await
             .map_err(|_| {
                 let elapsed = tokio::time::Instant::now() - start;
-                log::warn!("{log_tag}: TCP connection timed out after {elapsed:?}");
+                log::warn!("[{log_tag}] TCP connection timed out after {elapsed:?}");
                 TransportConnectError::TcpConnectionFailed
             })?
             .map_err(|e| {
@@ -115,10 +119,18 @@ impl Connector<TcpRoute<IpAddr>, ()> for StatelessTcp {
                 //   and it takes a long time to rollout logging, so let's just add it now.
                 let os_error = e.raw_os_error();
                 log::info!(
-                    "{log_tag}: TCP connection failed: kind={error_kind:?}, errno={os_error:?}"
+                    "[{log_tag}] TCP connection failed: kind={error_kind:?}, errno={os_error:?}"
                 );
                 TransportConnectError::TcpConnectionFailed
             })?;
+            match override_nagle_algorithm {
+                OverrideNagleAlgorithm::UseSystemDefault => {}
+                OverrideNagleAlgorithm::OverrideToOff => {
+                    if let Err(e) = result.set_nodelay(true) {
+                        log::info!("[{log_tag}] failed to set TCP_NODELAY: {e}");
+                    }
+                }
+            }
             #[cfg(target_os = "macos")]
             let result = crate::stream::WorkaroundWriteBugDuplexStream::new(result);
             Ok(result)
@@ -183,16 +195,20 @@ fn ssl_config(
     }
     ssl.set_min_proto_version(min_required_tls_version)?;
 
-    // This is just the default Boring TLS supported signature scheme list
-    //   with ed25519 added at the top of the preference order.
+    // This is the BoringSSL kVerifySignatureAlgorithms list with SHA-1 removed
+    //   and ed25519 added at the top of the preference order.
+    // See: https://github.com/google/boringssl/blob/13526b337f4d30d6303d9f51825c61519a2b1af1/ssl/extensions.cc#L287
     // We can't be any more specific because of the fallback proxies.
     ssl.set_verify_algorithm_prefs(&[
         SslSignatureAlgorithm::ED25519,
+        SslSignatureAlgorithm::ECDSA_SECP256R1_SHA256,
         SslSignatureAlgorithm::RSA_PSS_RSAE_SHA256,
         SslSignatureAlgorithm::RSA_PKCS1_SHA256,
-        SslSignatureAlgorithm::ECDSA_SECP256R1_SHA256,
-        SslSignatureAlgorithm::RSA_PKCS1_SHA1,
-        SslSignatureAlgorithm::ECDSA_SHA1,
+        SslSignatureAlgorithm::ECDSA_SECP384R1_SHA384,
+        SslSignatureAlgorithm::RSA_PSS_RSAE_SHA384,
+        SslSignatureAlgorithm::RSA_PKCS1_SHA384,
+        SslSignatureAlgorithm::RSA_PSS_RSAE_SHA512,
+        SslSignatureAlgorithm::RSA_PKCS1_SHA512,
     ])?;
 
     // Uncomment and build with the feature "dev-util" to enable NSS-standard
@@ -222,9 +238,10 @@ pub(crate) mod testutil {
 
     pub(crate) const SERVER_HOSTNAME: &str = "test-server.signal.org.local";
 
-    pub(crate) static SERVER_CERTIFICATE: LazyLock<CertifiedKey> = LazyLock::new(|| {
-        rcgen::generate_simple_self_signed([SERVER_HOSTNAME.to_string()]).expect("can generate")
-    });
+    pub(crate) static SERVER_CERTIFICATE: LazyLock<CertifiedKey<rcgen::KeyPair>> =
+        LazyLock::new(|| {
+            rcgen::generate_simple_self_signed([SERVER_HOSTNAME.to_string()]).expect("can generate")
+        });
 
     /// Starts an HTTPS server on `::1` using [`SERVER_CERTIFICATE`] and the provided `warp` filter.
     ///
@@ -293,7 +310,7 @@ pub(crate) mod testutil {
                 tokio::net::TcpListener::from_std(listener).expect("can convert to tokio");
 
             let private_key = boring_signal::pkey::PKey::private_key_from_der(
-                SERVER_CERTIFICATE.key_pair.serialized_der(),
+                SERVER_CERTIFICATE.signing_key.serialized_der(),
             )
             .expect("valid key");
             let cert = boring_signal::x509::X509::from_der(SERVER_CERTIFICATE.cert.der())
@@ -411,13 +428,17 @@ mod test {
     use std::num::NonZero;
 
     use assert_matches::assert_matches;
+    use boring_signal::x509::X509VerifyError;
     use futures_util::future::Either;
     use test_case::test_case;
     use warp::Filter as _;
 
     use super::testutil::*;
     use super::*;
+    use crate::OverrideNagleAlgorithm;
+    use crate::errors::FailedHandshakeReason;
     use crate::route::{ComposedConnector, ConnectorExt as _, TlsRoute};
+    use crate::tcp_ssl::proxy::testutil::PROXY_CERTIFICATE;
 
     #[test_case(Alpn::Http1_1, Alpn::Http2)]
     #[test_case(Alpn::Http2, Alpn::Http1_1)]
@@ -448,6 +469,7 @@ mod test {
                 inner: TcpRoute {
                     address: addr.ip(),
                     port: NonZero::new(addr.port()).expect("successful listener has a valid port"),
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
             },
             "transport",
@@ -470,6 +492,48 @@ mod test {
         assert!(
             !reason.to_string().contains("NO_APPLICATION_PROTOCOL"),
             "{reason}"
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn cert_mismatch() {
+        // This is overkill for testing a TLS connection, but it's also simple and more realistic
+        // than a generic server socket.
+        let (addr, server) = simple_localhost_https_server();
+        let server = Box::pin(server);
+
+        type StatelessTlsConnector = ComposedConnector<StatelessTls, StatelessTcp>;
+        let connector = StatelessTlsConnector::default();
+        let client = std::pin::pin!(connector.connect(
+            TlsRoute {
+                fragment: TlsRouteFragment {
+                    root_certs: RootCertificates::FromDer(Cow::Borrowed(
+                        // Wrong certificate!
+                        PROXY_CERTIFICATE.cert.der(),
+                    )),
+                    sni: Host::Domain(SERVER_HOSTNAME.into()),
+                    alpn: None,
+                    min_protocol_version: None,
+                },
+                inner: TcpRoute {
+                    address: addr.ip(),
+                    port: NonZero::new(addr.port()).expect("successful listener has a valid port"),
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
+                },
+            },
+            "transport",
+        ));
+
+        let err = match futures_util::future::select(client, server).await {
+            Either::Left((stream, _server)) => stream.expect_err("should have failed negotiation"),
+            Either::Right(_) => panic!("server exited unexpectedly"),
+        };
+
+        assert_matches!(
+            err,
+            TransportConnectError::SslFailedHandshake(FailedHandshakeReason::Cert(
+                X509VerifyError::DEPTH_ZERO_SELF_SIGNED_CERT
+            ))
         );
     }
 }

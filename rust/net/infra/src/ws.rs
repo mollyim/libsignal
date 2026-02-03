@@ -383,7 +383,7 @@ async fn connect_http2<Inner: WebSocketTransportStream, B: H2Body + Default>(
         );
         return Err(tungstenite::Error::Protocol(
             tungstenite::error::ProtocolError::InvalidHeader(
-                http::header::SEC_WEBSOCKET_EXTENSIONS,
+                http::header::SEC_WEBSOCKET_EXTENSIONS.into(),
             ),
         )
         .into());
@@ -477,7 +477,7 @@ impl From<tungstenite::Error> for WebSocketError {
             tungstenite::Error::Capacity(e) => Self::Capacity(e.into()),
             tungstenite::Error::WriteBufferFull(_) => Self::Capacity(SpaceError::SendQueueFull),
             tungstenite::Error::Url(e) => Self::Url(e),
-            tungstenite::Error::Http(response) => Self::Http(Box::new(response)),
+            tungstenite::Error::Http(response) => Self::Http(response),
             tungstenite::Error::HttpFormat(e) => Self::HttpFormat(e),
             tungstenite::Error::Utf8(_) => Self::Other("UTF-8 error"),
             tungstenite::Error::AttackAttempt => Self::Other("attack attempt"),
@@ -537,6 +537,7 @@ impl<S: crate::Connection + tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin
 
 /// Test utilities related to websockets.
 #[cfg(any(test, feature = "test-util"))]
+#[allow(clippy::unwrap_used)]
 pub mod testutil {
     use std::net::{Ipv4Addr, SocketAddr};
 
@@ -612,7 +613,7 @@ mod test {
         SERVER_CERTIFICATE, SERVER_HOSTNAME, localhost_https_server_with_custom_service,
     };
     use crate::tcp_ssl::{StatelessTcp, StatelessTls};
-    use crate::{Alpn, Connection};
+    use crate::{Alpn, Connection, OverrideNagleAlgorithm};
 
     #[tokio::test]
     async fn websocket_client_sends_pong_on_server_ping() {
@@ -764,6 +765,7 @@ mod test {
                 inner: TcpRoute {
                     address: addr.ip(),
                     port: NonZero::new(addr.port()).expect("successful listener has a valid port"),
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
             },
             "transport",
@@ -943,7 +945,7 @@ mod test {
             err,
             WebSocketConnectError::WebSocketError(WebSocketError::Protocol(
                 ProtocolError(tungstenite::error::ProtocolError::InvalidHeader(h))
-            )) if h == http::header::SEC_WEBSOCKET_EXTENSIONS
+            )) if *h == http::header::SEC_WEBSOCKET_EXTENSIONS
         );
     }
 

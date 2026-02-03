@@ -97,6 +97,10 @@ pub enum RemoteConfigKey {
     ChatRequestConnectionCheckTimeoutMilliseconds => "chatRequestConnectionCheckTimeoutMillis",
     /// Determines whether a chat websocket connection attempts to negotiate permessage-deflate support.
     EnableChatPermessageDeflate => "chatPermessageDeflate",
+    /// Whether to disable the Nagle algorithm (sets TCP_NODELAY).
+    DisableNagleAlgorithm => "disableNagleAlgorithm",
+    /// If set, unauth chat connections (only!) will connect over H2.
+    UseH2ForUnauthChat => "useH2ForUnauthChat"
 }
 }
 

@@ -1,5 +1,5 @@
-v0.86.6
+v0.86.12
 
-- Java artifacts are now published to build-artifacts.signal.org rather than Maven Central. See the README for further instructions.
+- Adds the "useH2ForUnauthChat" remote config, for experimenting with running unauthenticated chat connections over H2.
 
-- keytrans: Fall back to search-with-version if self-monitor returns unexpected versions.
+- Update to latest libcrux-ml-kem and spqr crates, addressing https://github.com/signalapp/libsignal/issues/641. Thank you to @GuuJiang for investigating and helping fix this issue!

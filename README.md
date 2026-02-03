@@ -1,3 +1,5 @@
+> **📣 If you were previously using libsignal from Maven or Gradle, our repository location has changed with the 0.86.6 release. See below for more information.**
+
 # Overview
 
 libsignal contains platform-agnostic APIs used by the official Signal clients and servers, exposed
@@ -43,15 +45,15 @@ increases to the minimum supported tools versions.
 
 ### Toolchain Installation
 
-To build anything in this repository you must have [Rust](https://rust-lang.org) installed,
-as well as Clang, libclang, [CMake](https://cmake.org), Make, protoc, and git.
+To build anything in this repository you must have [Rust](https://rust-lang.org) installed, as well
+as recent versions of Clang, libclang, [CMake](https://cmake.org), Make, protoc, Python (3.9+), and git.
 
 #### Linux/Debian
 
 On a Debian-like system, you can get these extra dependencies through `apt`:
 
 ```shell
-$ apt-get install clang libclang-dev cmake make protobuf-compiler git
+$ apt-get install clang libclang-dev cmake make protobuf-compiler python3 git
 ```
 
 #### macOS
@@ -266,6 +268,6 @@ Administration Regulations, Section 740.13) for both object code and source code
 
 ## License
 
-Copyright 2020-2024 Signal Messenger, LLC
+Copyright 2020-2026 Signal Messenger, LLC
 
 Licensed under the GNU AGPLv3: https://www.gnu.org/licenses/agpl-3.0.html

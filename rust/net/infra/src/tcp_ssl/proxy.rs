@@ -135,9 +135,10 @@ pub(crate) mod testutil {
 
     pub(crate) const PROXY_HOSTNAME: &str = "test-proxy.signal.org.local";
 
-    pub(crate) static PROXY_CERTIFICATE: LazyLock<CertifiedKey> = LazyLock::new(|| {
-        rcgen::generate_simple_self_signed([PROXY_HOSTNAME.to_string()]).expect("can generate")
-    });
+    pub(crate) static PROXY_CERTIFICATE: LazyLock<CertifiedKey<rcgen::KeyPair>> =
+        LazyLock::new(|| {
+            rcgen::generate_simple_self_signed([PROXY_HOSTNAME.to_string()]).expect("can generate")
+        });
 
     struct ProxyServer<S> {
         incoming_connections_stream: S,
@@ -212,12 +213,12 @@ pub(crate) mod testutil {
     }
 
     impl TlsServer {
-        pub(super) fn new(server: TcpServer, certificate: &CertifiedKey) -> Self {
+        pub(super) fn new(server: TcpServer, certificate: &CertifiedKey<rcgen::KeyPair>) -> Self {
             let ssl_acceptor = try_scoped(|| {
                 let mut builder = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server())?;
                 builder.set_certificate(X509::from_der(certificate.cert.der())?.as_ref())?;
                 builder.set_private_key(
-                    PKey::private_key_from_der(certificate.key_pair.serialized_der())?.as_ref(),
+                    PKey::private_key_from_der(certificate.signing_key.serialized_der())?.as_ref(),
                 )?;
                 // If the cert can be loaded, build the thing.
                 builder.check_private_key().map(|()| builder.build())
@@ -349,7 +350,6 @@ pub(crate) mod testutil {
 mod test {
     use std::borrow::Cow;
 
-    use crate::Alpn;
     use crate::certs::RootCertificates;
     use crate::host::Host;
     use crate::route::{
@@ -362,6 +362,7 @@ mod test {
         SERVER_CERTIFICATE, SERVER_HOSTNAME, make_http_request_response_over,
         simple_localhost_https_server,
     };
+    use crate::{Alpn, OverrideNagleAlgorithm};
 
     #[tokio::test]
     async fn connect_through_proxy() {
@@ -385,6 +386,7 @@ mod test {
                 inner: TcpRoute {
                     address: proxy_addr.ip(),
                     port: proxy_addr.port().try_into().unwrap(),
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
             },
         };
@@ -431,6 +433,7 @@ mod test {
             proxy: TcpRoute {
                 address: proxy_addr.ip(),
                 port: proxy_addr.port().try_into().unwrap(),
+                override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
             },
         };
 

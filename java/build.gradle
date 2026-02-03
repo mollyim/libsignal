@@ -20,7 +20,7 @@ repositories {
 }
 
 allprojects {
-    version = "0.86.6"
+    version = "0.86.12"
     group   = "org.signal"
 
     def overrideVersion = System.getenv("OVERRIDE_VERSION")

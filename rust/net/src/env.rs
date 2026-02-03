@@ -22,7 +22,7 @@ use libsignal_net_infra::route::{
 };
 use libsignal_net_infra::{
     AsStaticHttpHeader, ConnectionParams, EnableDomainFronting, EnforceMinimumTls,
-    RECOMMENDED_WS_CONFIG, RouteType, TransportConnectionParams,
+    OverrideNagleAlgorithm, RECOMMENDED_WS_CONFIG, RouteType, TransportConnectionParams,
 };
 use nonzero_ext::nonzero;
 use rand::seq::SliceRandom;
@@ -61,6 +61,21 @@ const DOMAIN_CONFIG_CHAT: DomainConfig = DomainConfig {
     },
 };
 
+const DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2: DomainConfig = DomainConfig {
+    ip_v4: &[],
+    ip_v6: &[],
+    connect: ConnectionConfig {
+        hostname: "grpc.chat.signal.org",
+        port: DEFAULT_HTTPS_PORT,
+        cert: SIGNAL_ROOT_CERTIFICATES,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http2),
+        confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
+        // This won't use H2, but we still want it as a fallback.
+        proxy: DOMAIN_CONFIG_CHAT.connect.proxy,
+    },
+};
+
 const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
     ip_v4: &[
         ip_addr!(v4, "76.223.72.142"),
@@ -81,6 +96,21 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
             path_prefix: "/service-staging",
             configs: [PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G],
         }),
+    },
+};
+
+const DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING: DomainConfig = DomainConfig {
+    ip_v4: &[],
+    ip_v6: &[],
+    connect: ConnectionConfig {
+        hostname: "grpc.chat.staging.signal.org",
+        port: DEFAULT_HTTPS_PORT,
+        cert: SIGNAL_ROOT_CERTIFICATES,
+        min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http2),
+        confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
+        // This won't use H2, but we still want it as a fallback.
+        proxy: DOMAIN_CONFIG_CHAT_STAGING.connect.proxy,
     },
 };
 
@@ -473,6 +503,7 @@ impl ConnectionConfig {
     pub fn route_provider(
         &self,
         enable_domain_fronting: EnableDomainFronting,
+        override_nagle_algorithm: OverrideNagleAlgorithm,
     ) -> HttpsProvider<DomainFrontRouteProvider, TlsRouteProvider<DirectTcpRouteProvider>> {
         let Self {
             hostname,
@@ -520,15 +551,22 @@ impl ConnectionConfig {
 
         let hostname = Arc::<str>::from(*hostname);
 
+        let direct_tcp_provider =
+            DirectTcpRouteProvider::new(Arc::clone(&hostname), *port, override_nagle_algorithm);
+
         HttpsProvider::new(
             Arc::clone(&hostname),
             http_version.expect("must have an HTTP version to connect to an HTTP resource"),
-            DomainFrontRouteProvider::new(HttpVersion::Http1_1, domain_front_configs),
+            DomainFrontRouteProvider::new(
+                HttpVersion::Http1_1,
+                domain_front_configs,
+                override_nagle_algorithm,
+            ),
             TlsRouteProvider::new(
                 cert.clone(),
                 *min_tls_version,
                 Host::Domain(Arc::clone(&hostname)),
-                DirectTcpRouteProvider::new(hostname, *port),
+                direct_tcp_provider,
             ),
         )
     }
@@ -537,12 +575,15 @@ impl ConnectionConfig {
         &self,
         enable_domain_fronting: EnableDomainFronting,
         enforce_minimum_tls: EnforceMinimumTls,
+        override_nagle_algorithm: OverrideNagleAlgorithm,
     ) -> HttpsProvider<DomainFrontRouteProvider, TlsRouteProvider<DirectTcpRouteProvider>> {
         match enforce_minimum_tls {
-            EnforceMinimumTls::Yes => self.route_provider(enable_domain_fronting),
+            EnforceMinimumTls::Yes => {
+                self.route_provider(enable_domain_fronting, override_nagle_algorithm)
+            }
             EnforceMinimumTls::No => self
                 .config_with_permissive_min_tls_version()
-                .route_provider(enable_domain_fronting),
+                .route_provider(enable_domain_fronting, override_nagle_algorithm),
         }
     }
 
@@ -694,6 +735,7 @@ pub struct Env<'a> {
     pub svr2: EnclaveEndpoint<'a, SvrSgx>,
     pub svr_b: SvrBEnv<'a>,
     pub chat_domain_config: DomainConfig,
+    pub experimental_chat_h2_domain_config: DomainConfig,
     pub chat_ws_config: crate::chat::ws::Config,
     pub keytrans_config: KeyTransConfig,
 }
@@ -710,6 +752,7 @@ impl<'a> Env<'a> {
             cdsi,
             svr2,
             chat_domain_config,
+            experimental_chat_h2_domain_config,
             svr_b,
             chat_ws_config: _,
             keytrans_config: _,
@@ -719,6 +762,7 @@ impl<'a> Env<'a> {
             cdsi.domain_config.static_fallback(rng.as_mut()),
             svr2.domain_config.static_fallback(rng.as_mut()),
             chat_domain_config.static_fallback(rng.as_mut()),
+            experimental_chat_h2_domain_config.static_fallback(rng.as_mut()),
         ]);
         result.extend(
             svr_b.current_and_previous().map(|enclave_endpoint| {
@@ -731,6 +775,7 @@ impl<'a> Env<'a> {
 
 pub const STAGING: Env<'static> = Env {
     chat_domain_config: DOMAIN_CONFIG_CHAT_STAGING,
+    experimental_chat_h2_domain_config: DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING,
     chat_ws_config: RECOMMENDED_CHAT_WS_CONFIG,
     cdsi: EnclaveEndpoint {
         domain_config: DOMAIN_CONFIG_CDSI_STAGING,
@@ -759,6 +804,7 @@ pub const STAGING: Env<'static> = Env {
 
 pub const PROD: Env<'static> = Env {
     chat_domain_config: DOMAIN_CONFIG_CHAT,
+    experimental_chat_h2_domain_config: DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2,
     chat_ws_config: RECOMMENDED_CHAT_WS_CONFIG,
     cdsi: EnclaveEndpoint {
         domain_config: DOMAIN_CONFIG_CDSI,
@@ -786,7 +832,8 @@ pub const PROD: Env<'static> = Env {
 };
 
 pub mod constants {
-    pub const WEB_SOCKET_PATH: &str = "/v1/websocket/";
+    pub const CHAT_WEBSOCKET_PATH: &str = "/v1/websocket/";
+    pub const CHAT_PROVISIONING_PATH: &str = "/v1/websocket/provisioning/";
 }
 
 #[cfg(test)]
@@ -856,8 +903,17 @@ mod test {
         }
     }
 
-    #[test_matrix([true, false])]
-    fn connect_config_routes_enable_domain_fronting(enable_domain_fronting: bool) {
+    #[test_matrix(
+        [true, false],
+        [
+            OverrideNagleAlgorithm::UseSystemDefault,
+            OverrideNagleAlgorithm::OverrideToOff
+        ]
+    )]
+    fn connect_config_routes_respect_route_provider_settings(
+        enable_domain_fronting: bool,
+        override_nagle_algorithm: OverrideNagleAlgorithm,
+    ) {
         const PORT: NonZeroU16 = nonzero!(123u16);
         const CONNECT_CONFIG: ConnectionConfig = ConnectionConfig {
             hostname: "host",
@@ -884,11 +940,14 @@ mod test {
                 ],
             }),
         };
-        let route_provider = CONNECT_CONFIG.route_provider(if enable_domain_fronting {
-            EnableDomainFronting::OneDomainPerProxy
-        } else {
-            EnableDomainFronting::No
-        });
+        let route_provider = CONNECT_CONFIG.route_provider(
+            if enable_domain_fronting {
+                EnableDomainFronting::OneDomainPerProxy
+            } else {
+                EnableDomainFronting::No
+            },
+            override_nagle_algorithm,
+        );
         let routes = route_provider.routes(&FakeContext::new()).collect_vec();
 
         let expected_direct_route = HttpsTlsRoute {
@@ -908,9 +967,14 @@ mod test {
                 inner: TcpRoute {
                     address: UnresolvedHost::from(Arc::from("host")),
                     port: PORT,
+                    override_nagle_algorithm,
                 },
             },
         };
+
+        assert!(routes
+            .iter()
+            .all(|route| route.inner.inner.override_nagle_algorithm == override_nagle_algorithm));
 
         if enable_domain_fronting {
             assert_eq!(routes.first(), Some(&expected_direct_route));

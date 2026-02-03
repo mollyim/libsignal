@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::str::FromStr;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use atomic_take::AtomicTake;
@@ -16,6 +17,7 @@ use futures_util::future::BoxFuture;
 use http::status::InvalidStatusCode;
 use http::uri::{InvalidUri, PathAndQuery};
 use http::{HeaderMap, HeaderName, HeaderValue};
+use libsignal_bridge_macros::bridge_callbacks;
 use libsignal_net::auth::Auth;
 use libsignal_net::chat::fake::FakeChatRemote;
 use libsignal_net::chat::server_requests::DisconnectCause;
@@ -25,6 +27,8 @@ use libsignal_net::chat::{
     LanguageList, Request, Response as ChatResponse, SendError, UnauthenticatedChatHeaders,
 };
 use libsignal_net::connect_state::ConnectionResources;
+use libsignal_net::env::constants::{CHAT_PROVISIONING_PATH, CHAT_WEBSOCKET_PATH};
+use libsignal_net::env::{ConnectionConfig, Env};
 use libsignal_net::infra::route::{
     DirectOrProxyMode, DirectOrProxyModeDiscriminants, DirectOrProxyProvider, RouteProvider,
     RouteProviderExt, TcpRoute, TlsRoute, UnresolvedHttpsServiceRoute,
@@ -36,7 +40,7 @@ use libsignal_protocol::Timestamp;
 use static_assertions::assert_impl_all;
 
 use crate::net::ConnectionManager;
-use crate::net::remote_config::RemoteConfigKey;
+use crate::net::remote_config::{RemoteConfig, RemoteConfigKey};
 use crate::support::LimitedLifetimeRef;
 use crate::*;
 
@@ -69,6 +73,17 @@ bridge_as_handle!(AuthenticatedChatConnection);
 impl UnwindSafe for AuthenticatedChatConnection {}
 impl RefUnwindSafe for AuthenticatedChatConnection {}
 
+pub struct ProvisioningChatConnection {
+    /// The possibly-still-being-constructed [`ChatConnection`].
+    ///
+    /// See [`AuthenticatedChatConnection::inner`] for rationale around lack of
+    /// reader/writer contention.
+    inner: tokio::sync::RwLock<MaybeChatConnection>,
+}
+bridge_as_handle!(ProvisioningChatConnection);
+impl UnwindSafe for ProvisioningChatConnection {}
+impl RefUnwindSafe for ProvisioningChatConnection {}
+
 // We could Box the PendingChatConnection, but in practice this type will be on the heap anyway, and
 // there won't be a ton of them allocated.
 #[expect(clippy::large_enum_variant)]
@@ -91,6 +106,7 @@ impl UnauthenticatedChatConnection {
         let inner = establish_chat_connection(
             "unauthenticated",
             connection_manager,
+            CHAT_WEBSOCKET_PATH,
             Some(UnauthenticatedChatHeaders { languages }.into()),
         )
         .await?;
@@ -135,6 +151,7 @@ impl AuthenticatedChatConnection {
         let inner = establish_chat_connection(
             "authenticated",
             connection_manager,
+            CHAT_WEBSOCKET_PATH,
             Some(
                 chat::AuthenticatedChatHeaders {
                     auth,
@@ -166,6 +183,7 @@ impl AuthenticatedChatConnection {
             connection_manager,
             enable_domain_fronting,
             enforce_minimum_tls,
+            None,
         )?
         .map_routes(|r| r.inner);
         let connection_resources = ConnectionResources {
@@ -183,6 +201,35 @@ impl AuthenticatedChatConnection {
     }
 }
 
+impl ProvisioningChatConnection {
+    pub async fn connect(connection_manager: &ConnectionManager) -> Result<Self, ConnectError> {
+        let inner = establish_chat_connection(
+            "provisioning",
+            connection_manager,
+            CHAT_PROVISIONING_PATH,
+            None,
+        )
+        .await?;
+        Ok(Self {
+            inner: MaybeChatConnection::WaitingForListener(
+                tokio::runtime::Handle::current(),
+                inner.into(),
+            )
+            .into(),
+        })
+    }
+
+    // Deliberately shadows the implementation on BridgeChatConnection, which takes the wrong kind
+    // of listener. Nothing *prevents* calling that on a ProvisioningChatConnection, but it won't be
+    // very useful, so don't do that.
+    pub fn init_listener(&self, listener: Box<dyn ProvisioningListener>) {
+        init_listener(
+            &mut self.as_ref().blocking_write(),
+            listener.into_event_listener(),
+        )
+    }
+}
+
 impl AsRef<tokio::sync::RwLock<MaybeChatConnection>> for AuthenticatedChatConnection {
     fn as_ref(&self) -> &tokio::sync::RwLock<MaybeChatConnection> {
         &self.inner
@@ -190,6 +237,12 @@ impl AsRef<tokio::sync::RwLock<MaybeChatConnection>> for AuthenticatedChatConnec
 }
 
 impl AsRef<tokio::sync::RwLock<MaybeChatConnection>> for UnauthenticatedChatConnection {
+    fn as_ref(&self) -> &tokio::sync::RwLock<MaybeChatConnection> {
+        &self.inner
+    }
+}
+
+impl AsRef<tokio::sync::RwLock<MaybeChatConnection>> for ProvisioningChatConnection {
     fn as_ref(&self) -> &tokio::sync::RwLock<MaybeChatConnection> {
         &self.inner
     }
@@ -211,7 +264,10 @@ pub trait BridgeChatConnection {
 
 impl<C: AsRef<tokio::sync::RwLock<MaybeChatConnection>> + Sync> BridgeChatConnection for C {
     fn init_listener(&self, listener: Box<dyn ChatListener>) {
-        init_listener(&mut self.as_ref().blocking_write(), listener)
+        init_listener(
+            &mut self.as_ref().blocking_write(),
+            listener.into_event_listener(),
+        )
     }
 
     async fn send(&self, message: Request, timeout: Duration) -> Result<ChatResponse, SendError> {
@@ -237,7 +293,7 @@ impl<C: AsRef<tokio::sync::RwLock<MaybeChatConnection>> + Sync> BridgeChatConnec
 
     fn info(&self) -> ConnectionInfo {
         let guard = self.as_ref().blocking_read();
-        let connection_info = match &*guard {
+        match &*guard {
             MaybeChatConnection::Running(chat_connection) => {
                 chat_connection.connection_info().clone()
             }
@@ -245,9 +301,7 @@ impl<C: AsRef<tokio::sync::RwLock<MaybeChatConnection>> + Sync> BridgeChatConnec
                 pending_chat_connection.blocking_lock().connection_info()
             }
             MaybeChatConnection::TemporarilyEvicted => unreachable!("unobservable state"),
-        };
-
-        connection_info.clone()
+        }
     }
 }
 
@@ -256,7 +310,13 @@ pub(crate) async fn connect_registration_chat(
     connection_manager: &ConnectionManager,
     drop_on_disconnect: tokio::sync::oneshot::Sender<Infallible>,
 ) -> Result<Unauth<ChatConnection>, ConnectError> {
-    let pending = establish_chat_connection("registration", connection_manager, None).await?;
+    let pending = establish_chat_connection(
+        "registration",
+        connection_manager,
+        CHAT_WEBSOCKET_PATH,
+        None,
+    )
+    .await?;
 
     let mut on_disconnect = Some(drop_on_disconnect);
     let listener = move |event| match event {
@@ -271,7 +331,7 @@ pub(crate) async fn connect_registration_chat(
     )))
 }
 
-fn init_listener(connection: &mut MaybeChatConnection, listener: Box<dyn ChatListener>) {
+fn init_listener(connection: &mut MaybeChatConnection, listener: chat::ws::EventListener) {
     let (tokio_runtime, pending) =
         match std::mem::replace(connection, MaybeChatConnection::TemporarilyEvicted) {
             MaybeChatConnection::Running(chat_connection) => {
@@ -287,7 +347,7 @@ fn init_listener(connection: &mut MaybeChatConnection, listener: Box<dyn ChatLis
     *connection = MaybeChatConnection::Running(ChatConnection::finish_connect(
         tokio_runtime,
         pending.into_inner(),
-        listener.into_event_listener(),
+        listener,
     ))
 }
 
@@ -296,11 +356,10 @@ pub struct FakeChatConnection(ChatConnection);
 impl FakeChatConnection {
     pub fn new<'a>(
         tokio_runtime: tokio::runtime::Handle,
-        listener: Box<dyn ChatListener>,
+        listener: chat::ws::EventListener,
         alerts: impl IntoIterator<Item = &'a str>,
     ) -> (Self, FakeChatRemote) {
-        let (inner, remote) =
-            ChatConnection::new_fake(tokio_runtime, listener.into_event_listener(), alerts);
+        let (inner, remote) = ChatConnection::new_fake(tokio_runtime, listener, alerts);
         (Self(inner), remote)
     }
 
@@ -317,11 +376,19 @@ impl FakeChatConnection {
             inner: MaybeChatConnection::Running(inner).into(),
         }
     }
+
+    pub fn into_provisioning(self) -> ProvisioningChatConnection {
+        let Self(inner) = self;
+        ProvisioningChatConnection {
+            inner: MaybeChatConnection::Running(inner).into(),
+        }
+    }
 }
 
 async fn establish_chat_connection(
-    auth_type: &'static str,
+    kind: &'static str,
     connection_manager: &ConnectionManager,
+    endpoint_path: &'static str,
     headers: Option<chat::ChatHeaders>,
 ) -> Result<chat::PendingChatConnection, ConnectError> {
     let ConnectionManager {
@@ -356,10 +423,11 @@ async fn establish_chat_connection(
         connection_manager,
         enable_domain_fronting,
         enforce_minimum_tls,
+        headers.as_ref(),
     )?;
     let proxy_mode = DirectOrProxyModeDiscriminants::from(&route_provider.mode);
 
-    log::info!("connecting {auth_type} chat");
+    log::info!("connecting {kind} chat");
 
     let mut chat_ws_config = env.chat_ws_config;
     let timeout_millis = {
@@ -385,10 +453,11 @@ async fn establish_chat_connection(
     ChatConnection::start_connect_with(
         connection_resources,
         route_provider,
+        endpoint_path,
         user_agent,
         chat_ws_config,
         headers,
-        auth_type,
+        kind,
     )
     .inspect(|r| match r {
         Ok(connection) => {
@@ -399,10 +468,10 @@ async fn establish_chat_connection(
                 (None, DirectOrProxyModeDiscriminants::DirectOnly)
                 | (Some(_), DirectOrProxyModeDiscriminants::ProxyOnly)
                 | (Some(_), DirectOrProxyModeDiscriminants::ProxyThenDirect) => {
-                    log::info!("successfully connected {auth_type} chat")
+                    log::info!("successfully connected {kind} chat")
                 }
                 (None, DirectOrProxyModeDiscriminants::ProxyThenDirect) => log::warn!(
-                    "connected {auth_type} chat using a direct connection rather than the specified proxy"
+                    "connected {kind} chat using a direct connection rather than the specified proxy"
                 ),
                 (None, DirectOrProxyModeDiscriminants::ProxyOnly) => unreachable!(
                     "made a direct connection despite using only proxy routes; this is a bug in libsignal"
@@ -412,7 +481,7 @@ async fn establish_chat_connection(
                 ),
             }
         }
-        Err(e) => log::warn!("failed to connect {auth_type} chat: {e}"),
+        Err(e) => log::warn!("failed to connect {kind} chat: {e}"),
     })
     .await
 }
@@ -421,13 +490,14 @@ fn make_route_provider(
     connection_manager: &ConnectionManager,
     enable_domain_fronting: EnableDomainFronting,
     enforce_minimum_tls: EnforceMinimumTls,
+    chat_headers: Option<&chat::ChatHeaders>,
 ) -> Result<
     DirectOrProxyProvider<
         impl RouteProvider<
             Route = UnresolvedHttpsServiceRoute<
                 TlsRoute<TcpRoute<libsignal_net::infra::route::UnresolvedHost>>,
             >,
-        >,
+        > + use<>,
     >,
     ConnectError,
 > {
@@ -441,13 +511,64 @@ fn make_route_provider(
         .try_into()
         .map_err(|InvalidProxyConfig| ConnectError::InvalidConnectionConfiguration)?;
 
-    let chat_connect = &env.chat_domain_config.connect;
+    let override_nagle_algorithm = connection_manager.tcp_nagle_override();
 
+    let chat_connect = choose_chat_connection_config(
+        env,
+        &proxy_mode,
+        chat_headers,
+        &connection_manager.remote_config,
+    );
+
+    let inner = chat_connect.route_provider_with_options(
+        enable_domain_fronting,
+        enforce_minimum_tls,
+        override_nagle_algorithm,
+    );
     Ok(DirectOrProxyProvider {
-        inner: chat_connect
-            .route_provider_with_options(enable_domain_fronting, enforce_minimum_tls),
+        inner,
         mode: proxy_mode,
     })
+}
+
+fn choose_chat_connection_config<'a>(
+    env: &'a Env<'_>,
+    proxy_mode: &DirectOrProxyMode,
+    chat_headers: Option<&chat::ChatHeaders>,
+    remote_config: &Mutex<RemoteConfig>,
+) -> &'a ConnectionConfig {
+    // At this time, in order to try the experimental H2 configuration:
+    let default_config = &env.chat_domain_config.connect;
+
+    // - We must specifically be making an unauthenticated connection.
+    match chat_headers {
+        None | Some(chat::ChatHeaders::Auth(_)) => {
+            return default_config;
+        }
+        Some(chat::ChatHeaders::Unauth(_)) => {}
+    }
+
+    // - We must be opted in to the experiment.
+    {
+        let guard = remote_config.lock().expect("not poisoned");
+        if !guard.is_enabled(RemoteConfigKey::UseH2ForUnauthChat) {
+            return default_config;
+        }
+    }
+
+    // - We must not be connecting via Signal-TLS-Proxy.
+    match proxy_mode {
+        DirectOrProxyMode::ProxyOnly(connection_proxy_config)
+        | DirectOrProxyMode::ProxyThenDirect(connection_proxy_config)
+            if connection_proxy_config.is_signal_transparent_proxy() =>
+        {
+            // Transparent proxies won't understand the H2 domain.
+            default_config
+        }
+        DirectOrProxyMode::DirectOnly
+        | DirectOrProxyMode::ProxyOnly(_)
+        | DirectOrProxyMode::ProxyThenDirect(_) => &env.experimental_chat_h2_domain_config.connect,
+    }
 }
 
 pub struct HttpRequest {
@@ -510,15 +631,16 @@ impl HttpRequest {
 /// A trait of callbacks for different kinds of [`chat::server_requests::ServerEvent`].
 ///
 /// Done as multiple functions so we can adjust the types to be more suitable for bridging.
+#[bridge_callbacks(jni = "org.signal.libsignal.net.internal.BridgeChatListener")]
 pub trait ChatListener: Send {
     fn received_incoming_message(
         &mut self,
-        envelope: Bytes,
+        envelope: bytes::Bytes,
         timestamp: Timestamp,
         ack: ServerMessageAck,
     );
     fn received_queue_empty(&mut self);
-    fn received_alerts(&mut self, alerts: Vec<String>);
+    fn received_alerts(&mut self, alerts: Box<[String]>);
     fn connection_interrupted(&mut self, disconnect_cause: DisconnectCause);
 }
 
@@ -538,14 +660,16 @@ impl dyn ChatListener {
                 ServerMessageAck::new(send_ack),
             ),
             chat::server_requests::ServerEvent::QueueEmpty => self.received_queue_empty(),
-            chat::server_requests::ServerEvent::Alerts(alerts) => self.received_alerts(alerts),
+            chat::server_requests::ServerEvent::Alerts(alerts) => {
+                self.received_alerts(alerts.into_boxed_slice())
+            }
             chat::server_requests::ServerEvent::Stopped(error) => {
                 self.connection_interrupted(error)
             }
         }
     }
 
-    fn into_event_listener(mut self: Box<Self>) -> Box<dyn FnMut(chat::ws::ListenerEvent) + Send> {
+    pub fn into_event_listener(mut self: Box<Self>) -> chat::ws::EventListener {
         Box::new(move |event| {
             let event: chat::server_requests::ServerEvent = match event.try_into() {
                 Ok(event) => event,
@@ -582,3 +706,53 @@ bridge_as_handle!(ServerMessageAck);
 // makes it `!RefUnwindSafe`. We're putting that back; because we only manipulate the `AtomicTake`
 // using its atomic operations, it can never be in an invalid state.
 impl std::panic::RefUnwindSafe for ServerMessageAck {}
+
+/// A trait of callbacks for different kinds of [`chat::server_requests::ProvisioningEvent`].
+///
+/// Done as multiple functions so we can adjust the types to be more suitable for bridging.
+#[bridge_callbacks(jni = "org.signal.libsignal.net.internal.BridgeProvisioningListener")]
+pub trait ProvisioningListener: Send {
+    fn received_address(&mut self, address: String, send_ack: ServerMessageAck);
+    fn received_envelope(&mut self, envelope: bytes::Bytes, send_ack: ServerMessageAck);
+    fn connection_interrupted(&mut self, disconnect_cause: DisconnectCause);
+}
+
+impl dyn ProvisioningListener {
+    /// A helper to translate from the libsignal-net enum to the separate callback methods in this
+    /// trait.
+    fn received_server_request(&mut self, request: chat::server_requests::ProvisioningEvent) {
+        match request {
+            chat::server_requests::ProvisioningEvent::ReceivedAddress { address, send_ack } => {
+                self.received_address(address, ServerMessageAck::new(send_ack))
+            }
+            chat::server_requests::ProvisioningEvent::ReceivedEnvelope { envelope, send_ack } => {
+                self.received_envelope(envelope, ServerMessageAck::new(send_ack))
+            }
+            chat::server_requests::ProvisioningEvent::Stopped(error) => {
+                self.connection_interrupted(error)
+            }
+        }
+    }
+
+    pub fn into_event_listener(mut self: Box<Self>) -> chat::ws::EventListener {
+        Box::new(move |event| {
+            if let ListenerEvent::ReceivedAlerts(alerts) = &event {
+                if !alerts.is_empty() {
+                    log::warn!(
+                        "unexpected alerts on provisioning connection: {}",
+                        alerts.join(",")
+                    );
+                }
+                return;
+            }
+            let event: chat::server_requests::ProvisioningEvent = match event.try_into() {
+                Ok(event) => event,
+                Err(err) => {
+                    log::error!("{err}");
+                    return;
+                }
+            };
+            self.received_server_request(event);
+        })
+    }
+}
