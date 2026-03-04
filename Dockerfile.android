@@ -19,7 +19,7 @@ RUN set -eux; \
     curl -fS "https://dl.google.com/android/repository/$ANDROID_SDK_DIST" -o sdk.zip; \
     echo "$ANDROID_SDK_SHA256" sdk.zip | sha256sum --check; \
     mkdir -p "$ANDROID_HOME"; \
-    unzip -q -d "$ANDROID_HOME/cmdline-tools/" sdk.zip; \
+    unzip -q sdk.zip -d "$ANDROID_HOME/cmdline-tools/"; \
     mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"; \
     rm sdk.zip; \
     yes | sdkmanager --licenses; \
@@ -29,6 +29,19 @@ RUN set -eux; \
 ARG NDK_VERSION="28.0.13004108"
 ENV ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
 RUN sdkmanager "ndk;$NDK_VERSION"
+
+# Install protoc from GitHub releases
+ARG PROTOC_VERSION="29.6"
+ARG PROTOC_SHA256="48785a926e73ffa3f68e2f22b14e7b849620c7a1d36809ac9249a5495e280323"
+RUN set -eux; \
+    curl -fSL "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip" -o protoc.zip; \
+    echo "$PROTOC_SHA256" protoc.zip | sha256sum --check; \
+    mkdir -p /opt/protoc; \
+    unzip -q protoc.zip -d /opt/protoc/; \
+    rm protoc.zip; \
+    ln -sf /opt/protoc/bin/protoc /usr/local/bin/protoc; \
+    protoc --version; \
+    test "$(protoc --version)" = "libprotoc $PROTOC_VERSION"
 
 ## Cache gradle wrapper
 COPY java/gradlew /libsignal/java/gradlew
@@ -57,7 +70,6 @@ RUN SNAPSHOT_ID=$(git show -s --format=%cd --date=format:%Y%m%dT%H%M%SZ HEAD) &&
     apt-get update --snapshot "$SNAPSHOT_ID" && \
     apt-get install -y --no-install-recommends \
       clang \
-      protobuf-compiler \
       cmake \
       make \
       crossbuild-essential-arm64 \
