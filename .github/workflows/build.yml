@@ -34,7 +34,7 @@ jobs:
         cache-read-only: true
 
     - name: Build Docker image
-      run: docker build -f Dockerfile.java -t libsignal-builder .
+      run: docker build -f Dockerfile.android -t libsignal-builder .
 
     - name: Build library inside Docker
       run: |
