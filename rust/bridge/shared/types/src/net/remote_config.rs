@@ -83,6 +83,10 @@ macro_rules! define_keys {
         impl RemoteConfigKey {
             #[doc = concat!("ts: export const NetRemoteConfigKeys = [", $("'", $key, "', "),* ,"] as const;")]
             pub const KEYS: &[&str] = &[$($key),*];
+            #[cfg(test)]
+            const IDENTITIER_KEY_PAIRS: &[(&str, &str)] = &[
+                $((stringify!($name), $key)),*
+            ];
         }
 
         impl HasRawKey for RemoteConfigKey {
@@ -109,6 +113,9 @@ pub enum RemoteConfigKey {
     // Typed API keys, based on gRPC request names.
     // These should all start with "grpc."
     AccountsAnonymousLookupUsernameHash => "grpc.AccountsAnonymousLookupUsernameHash",
+    AccountsAnonymousLookupUsernameLink => "grpc.AccountsAnonymousLookupUsernameLink",
+    AccountsAnonymousCheckAccountExistence => "grpc.AccountsAnonymousCheckAccountExistence",
+    MessagesAnonymousSendMultiRecipientMessage => "grpc.MessagesAnonymousSendMultiRecipientMessage",
 }
 }
 
@@ -236,6 +243,7 @@ mod tests {
         let all_known_grpc_keys: HashSet<&str> = std::iter::empty()
             .chain(services::AccountsAnonymous::iter().map(|x| x.into()))
             .chain(services::KeysAnonymous::iter().map(|x| x.into()))
+            .chain(services::MessagesAnonymous::iter().map(|x| x.into()))
             .collect();
 
         for key in super::RemoteConfigKey::KEYS
@@ -247,6 +255,11 @@ mod tests {
                 "unexpected gRPC key grpc.{key} (known keys:\n\t{}\n)",
                 all_known_grpc_keys.into_iter().sorted().join("\n\t")
             );
+        }
+        for (ident, key) in super::RemoteConfigKey::IDENTITIER_KEY_PAIRS {
+            if let Some(grpc_name) = key.strip_prefix("grpc.") {
+                assert_eq!(*ident, grpc_name);
+            }
         }
     }
 }

@@ -868,6 +868,34 @@ export class SenderCertificate {
   }
 }
 
+function bridgeSenderKeyStore(
+  store: SenderKeyStore
+): Native.BridgeSenderKeyStore {
+  return {
+    async storeSenderKey(
+      sender: Native.ProtocolAddress,
+      distributionId: Native.Uuid,
+      record: Native.SenderKeyRecord
+    ): Promise<void> {
+      return store.saveSenderKey(
+        ProtocolAddress._fromNativeHandle(sender),
+        uuid.stringify(distributionId),
+        SenderKeyRecord._fromNativeHandle(record)
+      );
+    },
+    async loadSenderKey(
+      sender: Native.ProtocolAddress,
+      distributionId: Native.Uuid
+    ): Promise<Native.SenderKeyRecord | null> {
+      const sk = await store.getSenderKey(
+        ProtocolAddress._fromNativeHandle(sender),
+        uuid.stringify(distributionId)
+      );
+      return sk ? sk._nativeHandle : null;
+    },
+  };
+}
+
 export class SenderKeyDistributionMessage {
   readonly _nativeHandle: Native.SenderKeyDistributionMessage;
 
@@ -883,7 +911,7 @@ export class SenderKeyDistributionMessage {
     const handle = await Native.SenderKeyDistributionMessage_Create(
       sender,
       uuid.parse(distributionId),
-      store
+      bridgeSenderKeyStore(store)
     );
     return new SenderKeyDistributionMessage(handle);
   }
@@ -942,7 +970,11 @@ export async function processSenderKeyDistributionMessage(
   message: SenderKeyDistributionMessage,
   store: SenderKeyStore
 ): Promise<void> {
-  await Native.SenderKeyDistributionMessage_Process(sender, message, store);
+  await Native.SenderKeyDistributionMessage_Process(
+    sender,
+    message,
+    bridgeSenderKeyStore(store)
+  );
 }
 
 export class SenderKeyMessage {
@@ -1156,38 +1188,13 @@ export abstract class IdentityKeyStore implements Native.IdentityKeyStore {
   abstract getIdentity(name: ProtocolAddress): Promise<PublicKey | null>;
 }
 
-export abstract class PreKeyStore implements Native.PreKeyStore {
-  async _savePreKey(id: number, record: Native.PreKeyRecord): Promise<void> {
-    return this.savePreKey(id, PreKeyRecord._fromNativeHandle(record));
-  }
-  async _getPreKey(id: number): Promise<Native.PreKeyRecord> {
-    const pk = await this.getPreKey(id);
-    return pk._nativeHandle;
-  }
-  async _removePreKey(id: number): Promise<void> {
-    return this.removePreKey(id);
-  }
-
+export abstract class PreKeyStore {
   abstract savePreKey(id: number, record: PreKeyRecord): Promise<void>;
   abstract getPreKey(id: number): Promise<PreKeyRecord>;
   abstract removePreKey(id: number): Promise<void>;
 }
 
-export abstract class SignedPreKeyStore implements Native.SignedPreKeyStore {
-  async _saveSignedPreKey(
-    id: number,
-    record: Native.SignedPreKeyRecord
-  ): Promise<void> {
-    return this.saveSignedPreKey(
-      id,
-      SignedPreKeyRecord._fromNativeHandle(record)
-    );
-  }
-  async _getSignedPreKey(id: number): Promise<Native.SignedPreKeyRecord> {
-    const pk = await this.getSignedPreKey(id);
-    return pk._nativeHandle;
-  }
-
+export abstract class SignedPreKeyStore {
   abstract saveSignedPreKey(
     id: number,
     record: SignedPreKeyRecord
@@ -1195,35 +1202,7 @@ export abstract class SignedPreKeyStore implements Native.SignedPreKeyStore {
   abstract getSignedPreKey(id: number): Promise<SignedPreKeyRecord>;
 }
 
-export abstract class KyberPreKeyStore implements Native.KyberPreKeyStore {
-  async _saveKyberPreKey(
-    kyberPreKeyId: number,
-    record: Native.KyberPreKeyRecord
-  ): Promise<void> {
-    return this.saveKyberPreKey(
-      kyberPreKeyId,
-      KyberPreKeyRecord._fromNativeHandle(record)
-    );
-  }
-  async _getKyberPreKey(
-    kyberPreKeyId: number
-  ): Promise<Native.KyberPreKeyRecord> {
-    const prekey = await this.getKyberPreKey(kyberPreKeyId);
-    return prekey._nativeHandle;
-  }
-
-  async _markKyberPreKeyUsed(
-    kyberPreKeyId: number,
-    signedPreKeyId: number,
-    baseKey: Native.PublicKey
-  ): Promise<void> {
-    return this.markKyberPreKeyUsed(
-      kyberPreKeyId,
-      signedPreKeyId,
-      PublicKey._fromNativeHandle(baseKey)
-    );
-  }
-
+export abstract class KyberPreKeyStore {
   abstract saveKyberPreKey(
     kyberPreKeyId: number,
     record: KyberPreKeyRecord
@@ -1236,33 +1215,7 @@ export abstract class KyberPreKeyStore implements Native.KyberPreKeyStore {
   ): Promise<void>;
 }
 
-export abstract class SenderKeyStore implements Native.SenderKeyStore {
-  async _saveSenderKey(
-    sender: Native.ProtocolAddress,
-    distributionId: Native.Uuid,
-    record: Native.SenderKeyRecord
-  ): Promise<void> {
-    return this.saveSenderKey(
-      ProtocolAddress._fromNativeHandle(sender),
-      uuid.stringify(distributionId),
-      SenderKeyRecord._fromNativeHandle(record)
-    );
-  }
-  async _getSenderKey(
-    sender: Native.ProtocolAddress,
-    distributionId: Native.Uuid
-  ): Promise<Native.SenderKeyRecord | null> {
-    const skr = await this.getSenderKey(
-      ProtocolAddress._fromNativeHandle(sender),
-      uuid.stringify(distributionId)
-    );
-    if (skr == null) {
-      return null;
-    } else {
-      return skr._nativeHandle;
-    }
-  }
-
+export abstract class SenderKeyStore {
   abstract saveSenderKey(
     sender: ProtocolAddress,
     distributionId: Uuid,
@@ -1285,7 +1238,7 @@ export async function groupEncrypt(
       sender,
       uuid.parse(distributionId),
       message,
-      store
+      bridgeSenderKeyStore(store)
     )
   );
 }
@@ -1295,7 +1248,11 @@ export async function groupDecrypt(
   store: SenderKeyStore,
   message: Uint8Array
 ): Promise<Uint8Array> {
-  return Native.GroupCipher_DecryptMessage(sender, message, store);
+  return Native.GroupCipher_DecryptMessage(
+    sender,
+    message,
+    bridgeSenderKeyStore(store)
+  );
 }
 
 export class SealedSenderDecryptionResult {
@@ -1514,6 +1471,72 @@ export function signalDecrypt(
   );
 }
 
+function bridgePreKeyStore(store: PreKeyStore): Native.BridgePreKeyStore {
+  return {
+    async storePreKey(id: number, record: Native.PreKeyRecord): Promise<void> {
+      return store.savePreKey(id, PreKeyRecord._fromNativeHandle(record));
+    },
+    async loadPreKey(id: number): Promise<Native.PreKeyRecord> {
+      const pk = await store.getPreKey(id);
+      return pk._nativeHandle;
+    },
+    async removePreKey(id: number): Promise<void> {
+      return store.removePreKey(id);
+    },
+  };
+}
+
+function bridgeSignedPreKeyStore(
+  store: SignedPreKeyStore
+): Native.BridgeSignedPreKeyStore {
+  return {
+    async storeSignedPreKey(
+      id: number,
+      record: Native.SignedPreKeyRecord
+    ): Promise<void> {
+      return store.saveSignedPreKey(
+        id,
+        SignedPreKeyRecord._fromNativeHandle(record)
+      );
+    },
+    async loadSignedPreKey(id: number): Promise<Native.SignedPreKeyRecord> {
+      const pk = await store.getSignedPreKey(id);
+      return pk._nativeHandle;
+    },
+  };
+}
+
+function bridgeKyberPreKeyStore(
+  store: KyberPreKeyStore
+): Native.BridgeKyberPreKeyStore {
+  return {
+    async storeKyberPreKey(
+      id: number,
+      record: Native.KyberPreKeyRecord
+    ): Promise<void> {
+      return store.saveKyberPreKey(
+        id,
+        KyberPreKeyRecord._fromNativeHandle(record)
+      );
+    },
+    async loadKyberPreKey(id: number): Promise<Native.KyberPreKeyRecord> {
+      const pk = await store.getKyberPreKey(id);
+      return pk._nativeHandle;
+    },
+    async markKyberPreKeyUsed(
+      id: number,
+      ecPrekeyId: number,
+      baseKey: Native.PublicKey
+    ): Promise<void> {
+      return store.markKyberPreKeyUsed(
+        id,
+        ecPrekeyId,
+        PublicKey._fromNativeHandle(baseKey)
+      );
+    },
+  };
+}
+
 export function signalDecryptPreKey(
   message: PreKeySignalMessage,
   address: ProtocolAddress,
@@ -1528,9 +1551,9 @@ export function signalDecryptPreKey(
     address,
     sessionStore,
     identityStore,
-    prekeyStore,
-    signedPrekeyStore,
-    kyberPrekeyStore
+    bridgePreKeyStore(prekeyStore),
+    bridgeSignedPreKeyStore(signedPrekeyStore),
+    bridgeKyberPreKeyStore(kyberPrekeyStore)
   );
 }
 
@@ -1644,9 +1667,9 @@ export async function sealedSenderDecryptMessage(
     localDeviceId,
     sessionStore,
     identityStore,
-    prekeyStore,
-    signedPrekeyStore,
-    kyberPrekeyStore
+    bridgePreKeyStore(prekeyStore),
+    bridgeSignedPreKeyStore(signedPrekeyStore),
+    bridgeKyberPreKeyStore(kyberPrekeyStore)
   );
   return SealedSenderDecryptionResult._fromNativeHandle(ssdr);
 }

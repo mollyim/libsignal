@@ -8,7 +8,7 @@ use itertools::Itertools as _;
 use libsignal_core::{DeviceId, ServiceId};
 use libsignal_net::infra::errors::LogSafeDisplay;
 
-use super::RequestError;
+use super::{AllowRateLimitChallenges, RequestError};
 use crate::logging::Redact;
 
 #[derive(Debug)]
@@ -36,8 +36,17 @@ pub enum MultiRecipientSendAuthorization {
     Group(zkgroup::groups::GroupSendFullToken),
 }
 
+/// High-level chat-server APIs for messaging
+///
+/// ### Generic?
+///
+/// The type parameter `T` is a marker to distinguish blanket impls that would otherwise overlap.
+/// Any concrete type will only impl this trait in one way; anywhere that needs to use
+/// UnauthenticatedChatApi generically should accept an arbitrary `T` here.
 #[async_trait]
-pub trait UnauthenticatedChatApi {
+pub trait UnauthenticatedChatApi<T> {
+    const ALLOW_RATE_LIMIT_CHALLENGES: AllowRateLimitChallenges = AllowRateLimitChallenges::No;
+
     async fn send_multi_recipient_message(
         &self,
         payload: bytes::Bytes,

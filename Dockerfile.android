@@ -2,8 +2,7 @@ FROM docker.io/eclipse-temurin:17.0.16_8-jdk-noble@sha256:63360a3f1ac5e0acf9c33d
 LABEL authors="mollyim"
 
 # Install essential tools
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get install -y --no-install-recommends -U \
       git \
       python3 \
       unzip \

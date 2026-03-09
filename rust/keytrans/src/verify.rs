@@ -38,6 +38,13 @@ const ALLOWED_AUDITOR_TIMESTAMP_RANGE: &TimestampRange = &TimestampRange {
 };
 const ENTRIES_MAX_BEHIND: u64 = 10_000_000;
 
+/// Upper bound on `tree_size` accepted from the server.
+///
+/// Tree math in [`crate::implicit`] and [`crate::log`] performs arithmetic
+/// like `2*(n-1)+1` that would overflow for `n > 2^63`. Bounding `tree_size`
+/// at `2^62` keeps all such arithmetic safely within `u64`.
+const MAX_TREE_SIZE: u64 = 1u64 << 62;
+
 #[derive(Clone, Debug, displaydoc::Display)]
 pub enum Error {
     /// Required field '{0}' not found
@@ -257,7 +264,7 @@ fn verify_full_tree_head(
         }
     }
 
-    Ok((tree_head.clone(), root))
+    Ok(LastTreeHead(tree_head.clone(), root))
 }
 
 /// Checks if the consistency proof against the baseline tree head needs to be
@@ -288,7 +295,7 @@ fn check_consistency_metadata<'a>(
             };
             Ok(None)
         }
-        Some((last, last_root)) if last.tree_size == current_head.tree_size => {
+        Some(LastTreeHead(last, last_root)) if last.tree_size == current_head.tree_size => {
             if current_root != last_root {
                 return Err(Error::BadData(
                     "root is different but tree size is same".to_string(),
@@ -306,7 +313,7 @@ fn check_consistency_metadata<'a>(
             }
             Ok(None)
         }
-        Some((last_head, last_root)) => {
+        Some(LastTreeHead(last_head, last_root)) => {
             if current_head.tree_size < last_head.tree_size {
                 return Err(Error::BadData(
                     "current tree size is less than previous tree size".to_string(),
@@ -386,7 +393,7 @@ pub fn verify_distinguished(
         return Ok(());
     }
     let root = match last_tree_head {
-        Some((tree_head, root)) if tree_head.tree_size == tree_size => root,
+        Some(LastTreeHead(tree_head, root)) if tree_head.tree_size == tree_size => root,
         _ => {
             return Err(Error::BadData(
                 "expected tree head not found in storage".to_string(),
@@ -394,7 +401,7 @@ pub fn verify_distinguished(
         }
     };
 
-    let (
+    let LastTreeHead(
         TreeHead {
             tree_size: distinguished_size,
             timestamp: _,
@@ -465,6 +472,19 @@ fn verify_search_internal(
         tree_head.tree_size
     };
     let search_proof = get_proto_field(&search, "search")?;
+
+    // Validate server-controlled tree parameters before any tree math, which
+    // would otherwise panic on out-of-range values.
+    if tree_size == 0 || tree_size > MAX_TREE_SIZE {
+        return Err(Error::VerificationFailed(
+            "tree_size out of range".to_string(),
+        ));
+    }
+    if search_proof.pos >= tree_size {
+        return Err(Error::VerificationFailed(
+            "search proof pos must be less than tree_size".to_string(),
+        ));
+    }
 
     let guide = ProofGuide::new(version, search_proof.pos, tree_size);
 
@@ -600,6 +620,14 @@ pub fn verify_monitor<'a>(
     let full_tree_head = get_proto_field(&res.tree_head, "tree_head")?;
     let tree_head = get_proto_field(&full_tree_head.tree_head, "tree_head")?;
     let tree_size = tree_head.tree_size;
+
+    // Validate server-controlled tree_size before any tree math, which would
+    // otherwise panic on out-of-range values.
+    if tree_size == 0 || tree_size > MAX_TREE_SIZE {
+        return Err(Error::VerificationFailed(
+            "tree_size out of range".to_string(),
+        ));
+    }
 
     let MonitorContext {
         last_tree_head,
@@ -1029,7 +1057,7 @@ mod test {
         let baseline = {
             let head = current_head.clone();
             let root = [0u8; 32];
-            let mut baseline = Some((head, root));
+            let mut baseline = Some(LastTreeHead(head, root));
 
             for baseline_mod in baseline_mods {
                 let Some(result) = baseline.as_mut() else {
