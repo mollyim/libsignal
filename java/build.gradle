@@ -21,7 +21,7 @@ repositories {
 }
 
 allprojects {
-    version = "0.88.0"
+    version = "0.89.1"
     group   = "org.signal"
 
     def overrideVersion = System.getenv("OVERRIDE_VERSION")
@@ -52,8 +52,8 @@ allprojects {
 }
 
 task makeJniLibrariesDesktop(type:Exec) {
-  group 'Rust'
-  description 'Build the JNI libraries'
+  group = 'Rust'
+  description = 'Build the JNI libraries'
 
   def debugLevelLogsFlag = project.hasProperty('debugLevelLogs') ? ['--debug-level-logs'] : []
   def jniTypeTaggingFlag = project.hasProperty('jniTypeTagging') ? ['--jni-type-tagging'] : []
@@ -64,8 +64,8 @@ task makeJniLibrariesDesktop(type:Exec) {
 }
 
 task makeJniLibrariesServer(type:Exec) {
-  group 'Rust'
-  description 'Build the JNI libraries'
+  group = 'Rust'
+  description = 'Build the JNI libraries'
 
   def debugLevelLogsFlag = project.hasProperty('debugLevelLogs') ? ['--debug-level-logs'] : []
   def jniTypeTaggingFlag = project.hasProperty('jniTypeTagging') ? ['--jni-type-tagging'] : []
@@ -77,12 +77,12 @@ task makeJniLibrariesServer(type:Exec) {
 }
 
 task cargoClean(type:Exec) {
-  group 'Rust'
+  group = 'Rust'
   commandLine 'cargo', 'clean'
 }
 
 task cleanJni(type: Delete) {
-  description 'Clean JNI libs'
+  description = 'Clean JNI libs'
   delete fileTree('./android/src/main/jniLibs') {
     include '**/*.so'
   }

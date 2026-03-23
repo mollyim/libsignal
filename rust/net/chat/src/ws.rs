@@ -6,6 +6,7 @@
 //! The `ws` module and its submodules implement a chat server based on REST-like requests over a
 //! websocket, as implemented in [`libsignal_net::chat`].
 
+mod backups;
 mod keys;
 mod keytrans;
 mod messages;
@@ -17,8 +18,7 @@ mod usernames;
 use std::future::Future;
 use std::time::Duration;
 
-use base64::Engine as _;
-use base64::prelude::BASE64_STANDARD;
+use base64::prelude::{BASE64_STANDARD, Engine as _};
 use http::StatusCode;
 use libsignal_net::chat;
 use libsignal_net::chat::{Request, Response, SendError};
@@ -29,7 +29,7 @@ use serde_with::serde_as;
 
 use crate::api::{
     AllowRateLimitChallenges, ChallengeOption, DisconnectedError, RateLimitChallenge, RequestError,
-    UserBasedAuthorization,
+    UploadForm, UserBasedAuthorization,
 };
 use crate::grpc::GrpcServiceProvider;
 use crate::logging::DebugAsStrOrBytes;
@@ -56,6 +56,24 @@ impl AsHttpHeader for UserBasedAuthorization {
         }
     }
 }
+
+/// A "remote" serde implementation to avoid putting serde traits on the public [`UploadForm`].
+///
+/// Use [`GetUploadFormResponse`] to receive [`UploadForm`]s using this implementation.
+#[serde_as]
+#[derive(serde::Deserialize)]
+#[serde(remote = "UploadForm")]
+struct UploadFormSerde {
+    cdn: u32,
+    key: String,
+    #[serde_as(as = "serde_with::Map<_, _>")]
+    headers: Vec<(String, String)>,
+    #[serde(rename = "signedUploadLocation")]
+    signed_upload_url: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GetUploadFormResponse(#[serde(with = "UploadFormSerde")] UploadForm);
 
 /// Marker type for use in [`crate::api`] traits.
 pub enum OverWs {}
@@ -378,6 +396,16 @@ where
     })
 }
 
+fn expect_empty_body(response: &chat::Response, label: &'static str) {
+    if !response.body.as_deref().unwrap_or_default().is_empty() {
+        log::warn!(
+            "ignoring body for {} result from {}",
+            response.status.as_u16(),
+            label
+        );
+    }
+}
+
 #[cfg(test)]
 mod testutil {
     use super::*;
@@ -428,6 +456,44 @@ mod testutil {
             request: chat::Request,
         ) -> impl Future<Output = Result<chat::Response, chat::SendError>> + Send {
             pretty_assertions::assert_eq!(self.expected, request);
+            std::future::ready(Ok(self.response.clone()))
+        }
+    }
+
+    pub(crate) struct JsonRequestValidator {
+        pub expected: chat::Request,
+        pub body: serde_json::Value,
+        pub response: chat::Response,
+    }
+
+    impl WsConnection for JsonRequestValidator {
+        fn send(
+            &self,
+            _log_tag: &'static str,
+            _log_safe_path: &str,
+            request: chat::Request,
+        ) -> impl Future<Output = Result<chat::Response, chat::SendError>> + Send {
+            let chat::Request {
+                method,
+                path,
+                headers,
+                body: body_from_expected_request,
+            } = &self.expected;
+
+            assert!(
+                body_from_expected_request.is_none(),
+                "expected.body should be None; the body is instead compared against the provided serde_json::Value"
+            );
+
+            pretty_assertions::assert_eq!(method, request.method);
+            pretty_assertions::assert_eq!(*path, request.path);
+            pretty_assertions::assert_eq!(*headers, request.headers);
+
+            let request_body: serde_json::Value =
+                serde_json::from_slice(&request.body.unwrap_or_default())
+                    .expect("body should be JSON");
+            pretty_assertions::assert_eq!(self.body, request_body);
+
             std::future::ready(Ok(self.response.clone()))
         }
     }

@@ -17,6 +17,9 @@ pub mod proto {
         pub mod account {
             tonic::include_proto!("org.signal.chat.account");
         }
+        pub mod backup {
+            tonic::include_proto!("org.signal.chat.backup");
+        }
         pub mod device {
             tonic::include_proto!("org.signal.chat.device");
         }
@@ -98,6 +101,7 @@ impl prost::Name for proto::google::rpc::ErrorInfo {
         const_str::concat!(
             "type.googleapis.com/",
             proto::google::rpc::ErrorInfo::PACKAGE,
+            ".",
             proto::google::rpc::ErrorInfo::NAME
         )
         .to_owned()
@@ -112,6 +116,7 @@ impl prost::Name for proto::google::rpc::BadRequest {
         const_str::concat!(
             "type.googleapis.com/",
             proto::google::rpc::BadRequest::PACKAGE,
+            ".",
             proto::google::rpc::BadRequest::NAME
         )
         .to_owned()
@@ -126,6 +131,7 @@ impl prost::Name for proto::google::rpc::RetryInfo {
         const_str::concat!(
             "type.googleapis.com/",
             proto::google::rpc::RetryInfo::PACKAGE,
+            ".",
             proto::google::rpc::RetryInfo::NAME
         )
         .to_owned()

@@ -11,6 +11,7 @@ use std::convert::Infallible;
 use libsignal_net::infra::errors::LogSafeDisplay;
 use ref_cast::RefCast as _;
 
+pub mod backups;
 pub mod keys;
 pub mod keytrans;
 pub mod messages;
@@ -28,6 +29,19 @@ pub struct Unauth<T>(pub T);
 impl<'a, T> From<&'a T> for &'a Unauth<T> {
     fn from(value: &'a T) -> Self {
         Unauth::ref_cast(value)
+    }
+}
+
+/// Marker wrapper for authenticated connections.
+///
+/// You can get `&Auth<Connection>` from `&Connection` using `Into`.
+#[derive(derive_more::Deref, ref_cast::RefCast)]
+#[repr(transparent)]
+pub struct Auth<T>(pub T);
+
+impl<'a, T> From<&'a T> for &'a Auth<T> {
+    fn from(value: &'a T) -> Self {
+        Auth::ref_cast(value)
     }
 }
 
@@ -85,6 +99,27 @@ impl<E, D> From<Infallible> for RequestError<E, D> {
     }
 }
 
+impl<E, D> RequestError<E, D> {
+    /// Substitutes one `Other` error type for another.
+    ///
+    /// This is a *flat* map because the transformation is allowed to return a different
+    /// `RequestError` case (usually `Unexpected`).
+    pub fn flat_map_other<E2>(
+        self,
+        f: impl FnOnce(E) -> RequestError<E2, D>,
+    ) -> RequestError<E2, D> {
+        match self {
+            RequestError::Timeout => RequestError::Timeout,
+            RequestError::Disconnected(d) => RequestError::Disconnected(d),
+            RequestError::RetryLater(retry_later) => RequestError::RetryLater(retry_later),
+            RequestError::Challenge(challenge) => RequestError::Challenge(challenge),
+            RequestError::ServerSideError => RequestError::ServerSideError,
+            RequestError::Unexpected { log_safe } => RequestError::Unexpected { log_safe },
+            RequestError::Other(e) => f(e),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
 #[cfg_attr(test, derive(Clone))]
 #[ignore_extra_doc_attributes]
@@ -126,6 +161,15 @@ pub enum ChallengeOption {
     Captcha,
 }
 
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct UploadForm {
+    pub cdn: u32,
+    pub key: String,
+    pub headers: Vec<(String, String)>,
+    pub signed_upload_url: String,
+}
+
 /// A convenience trait covering all Chat APIs.
 ///
 /// This should be extended to include any new submodules' traits.
@@ -136,7 +180,8 @@ pub enum ChallengeOption {
 /// Any concrete type will only impl this trait in one way; anywhere that needs to use
 /// UnauthenticatedChatApi generically should accept an arbitrary `T` here.
 pub trait UnauthenticatedChatApi<T>:
-    keys::UnauthenticatedChatApi<T>
+    backups::UnauthenticatedChatApi<T>
+    + keys::UnauthenticatedChatApi<T>
     + keytrans::UnauthenticatedChatApi
     + messages::UnauthenticatedChatApi<T>
     + profiles::UnauthenticatedChatApi
@@ -144,10 +189,49 @@ pub trait UnauthenticatedChatApi<T>:
 {
 }
 impl<T, U> UnauthenticatedChatApi<T> for U where
-    U: keys::UnauthenticatedChatApi<T>
+    U: backups::UnauthenticatedChatApi<T>
+        + keys::UnauthenticatedChatApi<T>
         + keytrans::UnauthenticatedChatApi
         + messages::UnauthenticatedChatApi<T>
         + profiles::UnauthenticatedChatApi
         + usernames::UnauthenticatedChatApi<T>
 {
+}
+
+#[cfg(test)]
+pub(crate) mod testutil {
+    use const_str::concat_bytes;
+    use data_encoding_macro::base64;
+    use rand::SeedableRng as _;
+
+    /// A standard RNG used for exact-match tests that (normally) depend on randomness.
+    pub(crate) fn fixed_seed_test_rng() -> impl rand::CryptoRng + Send {
+        rand_chacha::ChaCha20Rng::seed_from_u64(0)
+    }
+
+    /// A fake `GroupSendFullToken` with a known form for serialization
+    /// ([`SERIALIZED_GROUP_SEND_TOKEN`]).
+    pub(crate) fn structurally_valid_group_send_token() -> zkgroup::groups::GroupSendFullToken {
+        // A full token is a version byte, a length-prefixed truncated hash, and a 64-bit
+        // day-aligned expiration timestamp in seconds.
+        zkgroup::deserialize(concat_bytes!(
+            0,
+            16u64.to_le_bytes(),
+            [0; 16],
+            1700000000000u64.to_le_bytes()
+        ))
+        .expect("valid (enough)")
+    }
+
+    /// The serialized form of [`structurally_valid_group_send_token`].
+    pub(crate) const SERIALIZED_GROUP_SEND_TOKEN: &[u8] =
+        &base64!("ABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABo5c+LAQAA");
+
+    #[test]
+    fn serialized_group_send_token_is_correct() {
+        assert_eq!(
+            &zkgroup::serialize(&structurally_valid_group_send_token()),
+            SERIALIZED_GROUP_SEND_TOKEN,
+        );
+    }
 }

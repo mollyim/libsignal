@@ -119,8 +119,8 @@ public class SessionBuilder {
               Native.SessionBuilder_ProcessPreKeyBundle(
                   preKeyGuard.nativeHandle(),
                   remoteAddressGuard.nativeHandle(),
-                  sessionStore,
-                  identityKeyStore,
+                  SessionCipher.bridge(sessionStore),
+                  SessionCipher._bridge(identityKeyStore),
                   now.toEpochMilli()));
     }
   }

@@ -11,9 +11,34 @@ import org.signal.libsignal.internal.ObjectHandle
 import java.util.UUID
 
 @CalledFromNative
+internal interface IdentityKeyStore {
+  @Throws(Exception::class)
+  public fun getLocalIdentityKeyPair(): Pair<NativeHandleGuard.Owner, NativeHandleGuard.Owner>
+
+  @Throws(Exception::class)
+  public fun getLocalRegistrationId(): Int
+
+  @Throws(Exception::class)
+  public fun getIdentityKey(rawAddress: ObjectHandle): NativeHandleGuard.Owner?
+
+  @Throws(Exception::class)
+  public fun saveIdentityKey(
+    rawAddress: ObjectHandle,
+    rawKey: ObjectHandle,
+  ): Int
+
+  @Throws(Exception::class)
+  public fun isTrustedIdentity(
+    rawAddress: ObjectHandle,
+    rawKey: ObjectHandle,
+    rawDirection: Int,
+  ): Boolean
+}
+
+@CalledFromNative
 internal interface PreKeyStore {
   @Throws(Exception::class)
-  public fun loadPreKey(id: Int): NativeHandleGuard.Owner
+  public fun loadPreKey(id: Int): NativeHandleGuard.Owner?
 
   @Throws(Exception::class)
   public fun storePreKey(
@@ -28,7 +53,7 @@ internal interface PreKeyStore {
 @CalledFromNative
 internal interface SignedPreKeyStore {
   @Throws(Exception::class)
-  public fun loadSignedPreKey(id: Int): NativeHandleGuard.Owner
+  public fun loadSignedPreKey(id: Int): NativeHandleGuard.Owner?
 
   @Throws(Exception::class)
   public fun storeSignedPreKey(
@@ -40,7 +65,7 @@ internal interface SignedPreKeyStore {
 @CalledFromNative
 internal interface KyberPreKeyStore {
   @Throws(Exception::class)
-  public fun loadKyberPreKey(id: Int): NativeHandleGuard.Owner
+  public fun loadKyberPreKey(id: Int): NativeHandleGuard.Owner?
 
   @Throws(Exception::class)
   public fun storeKyberPreKey(
@@ -53,6 +78,18 @@ internal interface KyberPreKeyStore {
     id: Int,
     ecPrekeyId: Int,
     rawBaseKey: ObjectHandle,
+  )
+}
+
+@CalledFromNative
+internal interface SessionStore {
+  @Throws(Exception::class)
+  public fun loadSession(rawAddress: ObjectHandle): NativeHandleGuard.Owner?
+
+  @Throws(Exception::class)
+  public fun storeSession(
+    rawAddress: ObjectHandle,
+    rawSession: ObjectHandle,
   )
 }
 

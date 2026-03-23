@@ -669,7 +669,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 
 ```
 
-## libsignal-account-keys, attest, libsignal-jni, libsignal-jni-impl, libsignal-bridge, libsignal-bridge-macros, libsignal-bridge-types, libsignal-core, signal-crypto, device-transfer, libsignal-keytrans, signal-media, libsignal-message-backup, libsignal-message-backup-macros, libsignal-net, libsignal-net-chat, libsignal-net-grpc, libsignal-net-infra, poksho, libsignal-protocol, libsignal-svrb, usernames, zkcredential, zkgroup
+## libsignal-account-keys, attest, libsignal-jni, libsignal-jni-impl, libsignal-bridge, libsignal-bridge-macros, libsignal-bridge-types, libsignal-core, signal-crypto, libsignal-debug, device-transfer, libsignal-keytrans, signal-media, libsignal-message-backup, libsignal-message-backup-macros, libsignal-net, libsignal-net-chat, libsignal-net-grpc, libsignal-net-infra, poksho, libsignal-protocol, libsignal-svrb, usernames, zkcredential, zkgroup
 
 ```
 GNU AFFERO GENERAL PUBLIC LICENSE
@@ -5148,7 +5148,7 @@ DEALINGS IN THE SOFTWARE.
 
 ```
 
-## protobuf-codegen 3.7.2, protobuf-json-mapping 3.7.2, protobuf-support 3.7.2, protobuf 3.7.2
+## protobuf-codegen 3.7.2, protobuf-support 3.7.2, protobuf 3.7.2
 
 ```
 Copyright (c) 2019 Stepan Koltsov
@@ -6520,7 +6520,7 @@ SOFTWARE.
 
 ```
 
-## cesu8 1.1.0
+## cesu8 1.1.0, pbjson-build 0.9.0, pbjson-types 0.9.0, pbjson 0.9.0
 
 ```
 MIT License

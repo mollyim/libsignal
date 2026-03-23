@@ -26,7 +26,7 @@ pub struct PrivateKey {
 impl PrivateKey {
     pub fn new<R>(csprng: &mut R) -> Self
     where
-        R: CryptoRng + Rng,
+        R: CryptoRng + Rng + ?Sized,
     {
         // This is essentially StaticSecret::random_from_rng only with clamping
         let mut bytes = [0u8; 32];
@@ -48,6 +48,7 @@ impl PrivateKey {
         &self,
         their_public_key: &[u8; PUBLIC_KEY_LENGTH],
     ) -> [u8; AGREEMENT_LENGTH] {
+        let _trace = libsignal_debug::trace_block!("PrivateKey::calculate_agreement");
         *self
             .secret
             .diffie_hellman(&PublicKey::from(*their_public_key))
@@ -68,8 +69,9 @@ impl PrivateKey {
         message: &[&[u8]],
     ) -> [u8; SIGNATURE_LENGTH]
     where
-        R: CryptoRng + Rng,
+        R: CryptoRng + Rng + ?Sized,
     {
+        let _trace = libsignal_debug::trace_block!("PrivateKey::calculate_signature");
         let mut random_bytes = [0u8; 64];
         csprng.fill_bytes(&mut random_bytes);
 
@@ -119,6 +121,7 @@ impl PrivateKey {
         message: &[&[u8]],
         signature: &[u8; SIGNATURE_LENGTH],
     ) -> bool {
+        let _trace = libsignal_debug::trace_block!("PrivateKey::verify_signature");
         let mont_point = MontgomeryPoint(*their_public_key);
         let ed_pub_key_point =
             match mont_point.to_edwards((signature[SIGNATURE_LENGTH - 1] & 0b1000_0000_u8) >> 7) {

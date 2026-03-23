@@ -1,7 +1,7 @@
-v0.88.0
+v0.89.1
 
-- java: KeyTransparencyClient now returns RequestResult types
+- Add debug performance measuring hooks for Android (off by default; not present in prod builds)
 
-- Java: `SealedSessionCipher.encrypt(SignalProtocolAddress, SenderCertificate, byte[])` now throws `NoSessionException` instead of `AssertionError` when there's no usable 1:1 session with the given recipient. `encrypt(SignalProtocolAddress, UnidentifiedSenderMessageContent)` is not affected.
+- backups: Support group terminate update message.
 
-- Add "grpc.MessagesAnonymousSendMultiRecipientMessage" remote config, and the implementation backing it.
+- Bumps the gRPC remote config keys for AccountsAnonymousLookupUsernameLink, AccountsAnonymousCheckAccountExistence, and MessagesAnonymousSendMultiRecipientMessage to have a ".2" suffix.

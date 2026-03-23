@@ -4,8 +4,9 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'
 }
 
-sourceCompatibility = 17
-archivesBaseName = "libsignal-server"
+base {
+    archivesName = "libsignal-server"
+}
 
 repositories {
     mavenCentral()
@@ -47,14 +48,15 @@ test {
     testLogging {
         events 'passed','skipped','failed'
         showStandardStreams = true
-        showExceptions true
-        exceptionFormat 'full'
-        showCauses true
-        showStackTraces true
+        showExceptions = true
+        exceptionFormat = 'full'
+        showCauses = true
+        showStackTraces = true
     }
 }
 
 java {
+    sourceCompatibility = JavaVersion.VERSION_17
     withSourcesJar()
 }
 
@@ -94,13 +96,13 @@ afterEvaluate {
 publishing {
     publications {
         server(MavenPublication) {
-            artifactId = archivesBaseName
+            artifactId = base.archivesName.get()
             from components.java
             artifact dokkaHtmlJar
             artifact dokkaJavadocJar
 
             pom {
-                name = archivesBaseName
+                name = base.archivesName.get()
                 description = 'Signal Protocol cryptography library for Java (server-side)'
                 url = 'https://github.com/mollyim/libsignal'
 
