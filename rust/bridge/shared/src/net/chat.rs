@@ -14,16 +14,15 @@ use libsignal_bridge_types::net::chat::*;
 use libsignal_bridge_types::net::{ConnectionManager, TokioAsyncContext};
 use libsignal_bridge_types::support::AsType;
 use libsignal_core::ServiceId;
-use libsignal_net::auth::Auth;
 use libsignal_net::chat::{self, ConnectError, LanguageList, Response as ChatResponse, SendError};
 use libsignal_net_chat::api::keys::{DeviceSpecifier, GetPreKeysFailure, UnauthenticatedChatApi};
 use libsignal_net_chat::api::messages::{
-    MultiRecipientMessageResponse, MultiRecipientSendAuthorization, MultiRecipientSendFailure,
-    UnauthenticatedChatApi as _,
+    AuthenticatedChatApi, MultiRecipientMessageResponse, MultiRecipientSendAuthorization,
+    MultiRecipientSendFailure, UnauthenticatedChatApi as _,
 };
 use libsignal_net_chat::api::profiles::UnauthenticatedAccountExistenceApi;
 use libsignal_net_chat::api::usernames::UnauthenticatedChatApi as _;
-use libsignal_net_chat::api::{RequestError, UserBasedAuthorization};
+use libsignal_net_chat::api::{RequestError, UploadForm, UserBasedAuthorization};
 use libsignal_protocol::Timestamp;
 use uuid::Uuid;
 
@@ -196,9 +195,15 @@ async fn AuthenticatedChatConnection_connect(
     receive_stories: bool,
     languages: LanguageList,
 ) -> Result<AuthenticatedChatConnection, ConnectError> {
+    // TODO: Change the app-facing API to require an ACI and device ID, skip the parsing altogether.
+    // (And delete `parse_username` at that point.)
+    let (aci, device_id) = AuthenticatedChatConnection::parse_username(&username)
+        .expect("username must be of the form {ACI}.{deviceId}");
     AuthenticatedChatConnection::connect(
         connection_manager,
-        Auth { username, password },
+        aci,
+        device_id,
+        password,
         receive_stories,
         languages,
     )
@@ -330,4 +335,11 @@ async fn UnauthenticatedChatConnection_account_exists(
     account: ServiceId,
 ) -> Result<bool, RequestError<Infallible>> {
     chat.as_typed(|chat| chat.account_exists(account)).await
+}
+
+#[bridge_io(TokioAsyncContext)]
+async fn AuthenticatedChatConnection_get_upload_form(
+    chat: &AuthenticatedChatConnection,
+) -> Result<UploadForm, RequestError<Infallible>> {
+    chat.as_typed(|chat| chat.get_upload_form()).await
 }

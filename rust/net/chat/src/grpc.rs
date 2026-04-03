@@ -366,6 +366,7 @@ pub(crate) mod testutil {
     use tonic::Status;
 
     use super::*;
+    use crate::api::testutil::TEST_SELF_ACI;
     use crate::ws::WsConnection;
 
     pub(crate) fn req(uri: &str, body: impl prost::Message + 'static) -> http::Request<Vec<u8>> {
@@ -429,12 +430,16 @@ pub(crate) mod testutil {
             panic!("We should be only sending grpc here");
         }
 
-        async fn grpc_service_to_use_instead(
+        fn grpc_service_to_use_instead(
             &self,
             message: &'static str,
         ) -> Option<impl GrpcServiceProvider> {
             assert_eq!(message, self.message);
             Some(&self.validator)
+        }
+
+        fn self_aci(&self) -> Option<libsignal_core::Aci> {
+            Some(TEST_SELF_ACI)
         }
     }
 
@@ -892,7 +897,7 @@ mod test {
         };
         assert_matches!(
             RequestError::<Infallible>::from(tonic::Status::from_error(Box::new(
-                Http2TransportError(hyper_err)
+                Http2TransportError::Hyper(hyper_err)
             ))),
             RequestError::Disconnected(DisconnectedError::Transport { log_safe: _ })
         );
