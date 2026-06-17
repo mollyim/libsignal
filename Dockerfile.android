@@ -1,40 +1,61 @@
-FROM docker.io/eclipse-temurin:17.0.16_8-jdk-noble@sha256:63360a3f1ac5e0acf9c33dabd1ac1d6c5afaa24659536d57910a32ddada41a6c AS builder
-LABEL authors="mollyim"
+FROM docker.io/eclipse-temurin:17.0.19_10-jdk-noble@sha256:6135b2dcc36fc4df1e534fc39113722e412799ffdb9ec0ed914ffce366f235c5 AS base
 
-# Install essential tools
-RUN apt-get install -y --no-install-recommends -U \
+# Stage 1: base
+# Minimal environment with only system tools. This stage is stable and reusable across merges.
+
+RUN apt-get install -y --no-install-recommends --update \
+      fd-find \
       git \
-      python3 \
-      unzip \
+      ripgrep \
       rustup \
-    && rm -rf /var/lib/apt/lists/*
+      unzip \
+      python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Set a default Git identity
+RUN git config --global user.name "builder" \
+ && git config --global user.email "builder@docker.local"
+
+FROM base AS builder
+
+# Stage 2: builder
+# Adds toolchains, project source, and the build entrypoint.
+
+LABEL im.molly.artifacts.m2.path="/root/.m2/repository/"
 
 # Install Android SDK
 ARG ANDROID_SDK_DIST="commandlinetools-linux-13114758_latest.zip"
 ARG ANDROID_SDK_SHA256="7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee"
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH="$PATH:$ANDROID_HOME/cmdline-tools/latest/bin"
+
 RUN set -eux; \
     curl -fS "https://dl.google.com/android/repository/$ANDROID_SDK_DIST" -o sdk.zip; \
-    echo "$ANDROID_SDK_SHA256" sdk.zip | sha256sum --check; \
+    printf '%s  %s\n' "$ANDROID_SDK_SHA256" "sdk.zip" | sha256sum -c; \
     mkdir -p "$ANDROID_HOME"; \
     unzip -q sdk.zip -d "$ANDROID_HOME/cmdline-tools/"; \
-    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"; \
     rm sdk.zip; \
+    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"; \
     yes | sdkmanager --licenses; \
     sdkmanager "platform-tools"
 
-# Install Android NDK
 ARG NDK_VERSION="28.0.13004108"
-ENV ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
 RUN sdkmanager "ndk;$NDK_VERSION"
+
+ENV ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+
+ARG BUILD_TOOLS_VERSION="36.0.0"
+RUN sdkmanager "build-tools;${BUILD_TOOLS_VERSION}"
+
+ARG COMPILE_SDK="android-34"
+RUN sdkmanager "platforms;${COMPILE_SDK}"
 
 # Install protoc from GitHub releases
 ARG PROTOC_VERSION="29.6"
 ARG PROTOC_SHA256="48785a926e73ffa3f68e2f22b14e7b849620c7a1d36809ac9249a5495e280323"
 RUN set -eux; \
     curl -fSL "https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip" -o protoc.zip; \
-    echo "$PROTOC_SHA256" protoc.zip | sha256sum --check; \
+    printf '%s  %s\n' "$PROTOC_SHA256" "protoc.zip" | sha256sum -c; \
     mkdir -p /opt/protoc; \
     unzip -q protoc.zip -d /opt/protoc/; \
     rm protoc.zip; \
@@ -42,15 +63,25 @@ RUN set -eux; \
     protoc --version; \
     test "$(protoc --version)" = "libprotoc $PROTOC_VERSION"
 
-## Cache gradle wrapper
-COPY java/gradlew /libsignal/java/gradlew
-COPY java/gradle /libsignal/java/gradle/
+# Install build tools pinned to a fixed timestamp via snapshot service
+ARG APT_SNAPSHOT_ID=20260703T000000Z
+RUN apt-get update --snapshot "$APT_SNAPSHOT_ID" \
+ && apt-get install -y --no-install-recommends \
+      clang \
+      cmake \
+      crossbuild-essential-arm64 \
+      make \
+ && rm -rf /var/lib/apt/lists/*
+
+# Cache gradle wrapper
+COPY java/gradlew /libsignal/java/
+COPY java/gradle/wrapper /libsignal/java/gradle/wrapper
 RUN /libsignal/java/gradlew --version
 
 # Set optional read-only Gradle cache (mount at runtime)
 ENV GRADLE_RO_DEP_CACHE=/.gradle-ro-cache
 
-# Install Rust toolchain and Android targets
+# Install Rust toolchain and targets
 COPY rust-toolchain /libsignal/
 RUN rustup toolchain install "$(cat /libsignal/rust-toolchain)" --profile minimal \
       --target aarch64-linux-android \
@@ -59,30 +90,32 @@ RUN rustup toolchain install "$(cat /libsignal/rust-toolchain)" --profile minima
       --target aarch64-unknown-linux-gnu \
       --no-self-update
 
-# Copy project files
+# Copy project and purge generated files
 COPY . /libsignal/
 WORKDIR /libsignal
 RUN git clean -ffdx
 
-# Install compiler and build tools for the library, pinned via snapshot service
-RUN SNAPSHOT_ID=$(git show -s --format=%cd --date=format:%Y%m%dT%H%M%SZ HEAD) && \
-    apt-get update --snapshot "$SNAPSHOT_ID" && \
-    apt-get install -y --no-install-recommends \
-      clang \
-      cmake \
-      make \
-      crossbuild-essential-arm64 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create build script
-RUN cat <<'EOF' > build.sh
+# Build entrypoint
+RUN cat <<'EOF' > build.sh && chmod +x build.sh
 #!/bin/sh
 set -eu
 export OVERRIDE_VERSION=$(git describe --tags --always)
-./java/gradlew -p java "$@"
-EOF
-RUN chmod +x build.sh
 
-# Set entrypoint to the build script
+usage() {
+  echo "Usage: build.sh verify|install|publish|help [args...]"
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  verify)  ./java/gradlew -p java build "$@" ;;
+  install) ./java/gradlew -p java publishToMavenLocal "$@" ;;
+  publish) ./java/gradlew -p java publish "$@" ;;
+  help|-h|--help) usage ;;
+  *) echo "unknown command: $cmd" >&2; usage >&2; exit 2 ;;
+esac
+EOF
+
 ENTRYPOINT ["/libsignal/build.sh"]
-CMD ["--help"]
+CMD ["help"]

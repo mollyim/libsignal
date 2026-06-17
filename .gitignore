@@ -1,5 +1,6 @@
 .idea
 *.iml
+/merge/
 /target
 /swift/**/.build
 /swift/**/.swiftpm

@@ -1,5 +1,9 @@
-/target
-/java/build
-/java/android/build
-/java/java/build
-/java/tests/build
+/java/.gradle/
+/java/.kotlin/
+/java/build/
+/java/android/build/
+/java/client/build/
+/java/java/build/
+/java/server/build/
+/java/tests/build/
+/target/

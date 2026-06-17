@@ -40,4 +40,4 @@ jobs:
       run: |
         docker run \
           -v "$HOME/.gradle/caches:/.gradle-ro-cache:ro" \
-          libsignal-builder build
+          libsignal-builder verify

@@ -19,6 +19,7 @@ repositories {
 android {
     namespace = 'org.signal.libsignal'
 
+    // MOLLY: Keep compileSdk and ndkVersion in sync with Dockerfile.android
     compileSdk 34
     ndkVersion = '28.0.13004108'
 
