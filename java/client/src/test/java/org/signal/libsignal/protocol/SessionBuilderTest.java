@@ -66,7 +66,8 @@ public class SessionBuilderTest {
     Pair<SignalProtocolStore, SignalProtocolStore> initializeSessions() {
       try {
         SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-        SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+        SessionBuilder aliceSessionBuilder =
+            new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
         SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
 
@@ -132,7 +133,7 @@ public class SessionBuilderTest {
       runInteraction(aliceStore, bobStore);
 
       aliceStore = new TestInMemorySignalProtocolStore();
-      var aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      var aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
       var aliceSessionCipher = new SessionCipher(aliceStore, ALICE_ADDRESS, BOB_ADDRESS);
 
       PreKeyBundle anotherBundle = bundleFactory.createBundle(bobStore);
@@ -188,7 +189,8 @@ public class SessionBuilderTest {
             LegacyMessageException,
             NoSessionException {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
 
@@ -233,7 +235,8 @@ public class SessionBuilderTest {
     @Test
     public void testOptionalOneTimePreKey() throws Exception {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
       PreKeyBundle bobPreKey = bundleFactory.createBundle(bobStore);
@@ -287,7 +290,8 @@ public class SessionBuilderTest {
             UntrustedIdentityException,
             NoSessionException {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       final SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
 
@@ -296,8 +300,8 @@ public class SessionBuilderTest {
       aliceSessionBuilder.process(bobPreKey, Instant.EPOCH);
 
       SessionRecord initialSession = aliceStore.loadSession(BOB_ADDRESS);
-      assertTrue(initialSession.hasSenderChain(Instant.EPOCH));
-      assertFalse(initialSession.hasSenderChain(Instant.EPOCH.plus(90, ChronoUnit.DAYS)));
+      assertTrue(initialSession.hasSenderChain(1.0, Instant.EPOCH));
+      assertFalse(initialSession.hasSenderChain(1.0, Instant.EPOCH.plus(90, ChronoUnit.DAYS)));
 
       String originalMessage = "Good, fast, cheap: pick two";
       SessionCipher aliceSessionCipher = new SessionCipher(aliceStore, ALICE_ADDRESS, BOB_ADDRESS);
@@ -307,8 +311,8 @@ public class SessionBuilderTest {
       assertTrue(outgoingMessage.getType() == CiphertextMessage.PREKEY_TYPE);
 
       SessionRecord updatedSession = aliceStore.loadSession(BOB_ADDRESS);
-      assertTrue(updatedSession.hasSenderChain(Instant.EPOCH));
-      assertFalse(updatedSession.hasSenderChain(Instant.EPOCH.plus(90, ChronoUnit.DAYS)));
+      assertTrue(updatedSession.hasSenderChain(1.0, Instant.EPOCH));
+      assertFalse(updatedSession.hasSenderChain(1.0, Instant.EPOCH.plus(90, ChronoUnit.DAYS)));
 
       try {
         aliceSessionCipher.encrypt(
@@ -322,7 +326,8 @@ public class SessionBuilderTest {
     @Test
     public void testRejectsPreKeyMesageSentFromDifferentUser() throws Exception {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
       PreKeyBundle bobPreKey = bundleFactory.createBundle(bobStore);
@@ -375,7 +380,8 @@ public class SessionBuilderTest {
     public void testBadSignedPreKeySignature()
         throws InvalidKeyException, UntrustedIdentityException {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       IdentityKeyStore bobIdentityKeyStore = new TestInMemoryIdentityKeyStore();
 
@@ -480,7 +486,8 @@ public class SessionBuilderTest {
             InvalidKeyIdException,
             NoSessionException {
       SignalProtocolStore aliceStore = new TestInMemorySignalProtocolStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestInMemorySignalProtocolStore();
       BundleFactory bundleFactory = new PQXDHBundleFactory();
@@ -530,7 +537,8 @@ public class SessionBuilderTest {
             LegacyMessageException,
             NoSessionException {
       SignalProtocolStore aliceStore = new TestNoSignedPreKeysStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestNoSignedPreKeysStore();
       BundleFactory bundleFactory = new PQXDHBundleFactory();
@@ -567,7 +575,8 @@ public class SessionBuilderTest {
             LegacyMessageException,
             NoSessionException {
       SignalProtocolStore aliceStore = new TestBadSignedPreKeysStore();
-      SessionBuilder aliceSessionBuilder = new SessionBuilder(aliceStore, BOB_ADDRESS);
+      SessionBuilder aliceSessionBuilder =
+          new SessionBuilder(aliceStore, BOB_ADDRESS, ALICE_ADDRESS);
 
       SignalProtocolStore bobStore = new TestBadSignedPreKeysStore();
       BundleFactory bundleFactory = new PQXDHBundleFactory();

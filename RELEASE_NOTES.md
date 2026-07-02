@@ -1,14 +1,7 @@
-v0.91.0
+v0.96.3
 
-- Support gRPC for getUploadForm()
-- 1:1 message encryption and decryption now takes the local address as an extra argument
+- node: Generate attestation for published packages
 
-- Add `UserBasedAuthorization.UnrestrictedUnauthenticatedAccess` / `unrestrictedUnauthenticatedAccess` / `'unrestricted'` for `UnauthKeysService.getPreKeys` (and for 1:1 sealed sender messages in the future).
+- Add setDeviceName() typed API
 
-- Log more details on gRPC failure
-
-- Log backtraces on panic
-
-- Node: Support H2 when using `localTestServer` mode for Net connections.
-
-- Support upload sizes on getUploadForm()
+- protocol: Fix encoded type byte for ML-KEM-1024 keys and ciphertexts (previously they were misidentified as Kyber-1024, which is wire-compatible but with a different interpretation). Fortunately ML-KEM-1024 is not currently used by Signal in this way, so there will be no actual keys or ciphertexts with the "wrong" value on real devices.

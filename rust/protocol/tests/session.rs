@@ -61,6 +61,7 @@ fn test_basic_prekey() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -161,6 +162,7 @@ fn test_basic_prekey() -> TestResult {
             let bob_pre_key_bundle = bob_store_builder.make_bundle_with_latest_keys(bob_device_id);
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alter_alice_store.session_store,
                 &mut alter_alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -222,6 +224,7 @@ fn test_basic_prekey() -> TestResult {
             assert!(
                 process_prekey_bundle(
                     &bob_address,
+                    &alice_address,
                     &mut alter_alice_store.session_store,
                     &mut alter_alice_store.identity_store,
                     &bad_bob_pre_key_bundle,
@@ -269,6 +272,7 @@ fn test_chain_jump_over_limit() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -335,9 +339,12 @@ fn test_chain_jump_over_limit_with_self() -> TestResult {
             let mut csprng = OsRng.unwrap_err();
 
             let device_id_1 = DeviceId::new(1).unwrap();
-            let a1_address = ProtocolAddress::new("+14151111111".to_owned(), device_id_1);
+            let a1_address = ProtocolAddress::new(
+                "820d0f85-c714-4611-8faf-4b1087f150ab".to_owned(),
+                device_id_1,
+            );
             let device_id_2 = DeviceId::new(2).unwrap();
-            let a2_address = ProtocolAddress::new("+14151111111".to_owned(), device_id_2);
+            let a2_address = ProtocolAddress::new(a1_address.name().to_string(), device_id_2);
 
             let a1_store = &mut a1_store_builder.store;
 
@@ -345,6 +352,7 @@ fn test_chain_jump_over_limit_with_self() -> TestResult {
 
             process_prekey_bundle(
                 &a2_address,
+                &a1_address,
                 &mut a1_store.session_store,
                 &mut a1_store.identity_store,
                 &a2_pre_key_bundle,
@@ -399,6 +407,8 @@ fn test_chain_jump_over_limit_with_self() -> TestResult {
 fn test_bad_signed_pre_key_signature() -> TestResult {
     async {
         let mut csprng = OsRng.unwrap_err();
+        let alice_address =
+            ProtocolAddress::new("+14151111113".to_owned(), DeviceId::new(1).unwrap());
         let bob_address =
             ProtocolAddress::new("+14151111112".to_owned(), DeviceId::new(1).unwrap());
 
@@ -430,6 +440,7 @@ fn test_bad_signed_pre_key_signature() -> TestResult {
             assert!(
                 process_prekey_bundle(
                     &bob_address,
+                    &alice_address,
                     &mut alice_store.session_store,
                     &mut alice_store.identity_store,
                     &bad_bundle,
@@ -444,6 +455,7 @@ fn test_bad_signed_pre_key_signature() -> TestResult {
         // Finally check that the non-corrupted signature is accepted:
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &good_bundle,
@@ -490,6 +502,7 @@ fn test_repeat_bundle_message() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -627,6 +640,7 @@ fn test_bad_message_bundle() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -723,6 +737,7 @@ fn test_optional_one_time_prekey() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -901,6 +916,7 @@ fn test_basic_simultaneous_initiate() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -911,6 +927,7 @@ fn test_basic_simultaneous_initiate() -> TestResult {
 
             process_prekey_bundle(
                 &alice_address,
+                &bob_address,
                 &mut bob_store.session_store,
                 &mut bob_store.identity_store,
                 &alice_pre_key_bundle,
@@ -1075,6 +1092,7 @@ fn test_simultaneous_initiate_with_lossage() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -1085,6 +1103,7 @@ fn test_simultaneous_initiate_with_lossage() -> TestResult {
 
             process_prekey_bundle(
                 &alice_address,
+                &bob_address,
                 &mut bob_store.session_store,
                 &mut bob_store.identity_store,
                 &alice_pre_key_bundle,
@@ -1228,6 +1247,7 @@ fn test_simultaneous_initiate_lost_message() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -1238,6 +1258,7 @@ fn test_simultaneous_initiate_lost_message() -> TestResult {
 
             process_prekey_bundle(
                 &alice_address,
+                &bob_address,
                 &mut bob_store.session_store,
                 &mut bob_store.identity_store,
                 &alice_pre_key_bundle,
@@ -1386,6 +1407,7 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 process_prekey_bundle(
                     &bob_address,
+                    &alice_address,
                     &mut alice_store_builder.store.session_store,
                     &mut alice_store_builder.store.identity_store,
                     &bob_pre_key_bundle,
@@ -1396,6 +1418,7 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 process_prekey_bundle(
                     &alice_address,
+                    &bob_address,
                     &mut bob_store_builder.store.session_store,
                     &mut bob_store_builder.store.identity_store,
                     &alice_pre_key_bundle,
@@ -1668,6 +1691,7 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store_builder.store.session_store,
                 &mut alice_store_builder.store.identity_store,
                 &bob_pre_key_bundle,
@@ -1694,6 +1718,7 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 process_prekey_bundle(
                     &bob_address,
+                    &alice_address,
                     &mut alice_store_builder.store.session_store,
                     &mut alice_store_builder.store.identity_store,
                     &bob_pre_key_bundle,
@@ -1704,6 +1729,7 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 process_prekey_bundle(
                     &alice_address,
+                    &bob_address,
                     &mut bob_store_builder.store.session_store,
                     &mut bob_store_builder.store.identity_store,
                     &alice_pre_key_bundle,
@@ -2021,6 +2047,7 @@ fn test_zero_is_a_valid_prekey_id() -> TestResult {
 
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -2098,6 +2125,7 @@ fn test_unacknowledged_sessions_eventually_expire() -> TestResult {
 
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -2189,7 +2217,7 @@ fn test_unacknowledged_sessions_eventually_expire() -> TestResult {
         .await
         .unwrap_err();
         assert!(
-            matches!(&error, SignalProtocolError::SessionNotFound(addr) if addr == &bob_address),
+            matches!(&error, SignalProtocolError::SessionNotFound(SessionNotFound{address: Some(address), op: _}) if address == &bob_address),
             "{error:?}"
         );
 
@@ -2220,6 +2248,7 @@ fn prekey_message_failed_decryption_does_not_update_stores() -> TestResult {
         let mut bob_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &alice_address,
+            &bob_address,
             &mut bob_store.session_store,
             &mut bob_store.identity_store,
             &alice_pre_key_bundle,
@@ -2277,8 +2306,9 @@ fn prekey_message_failed_decryption_does_not_update_stores() -> TestResult {
             .await,
             Err(SignalProtocolError::InvalidMessage(
                 CiphertextMessageType::PreKey,
-                "decryption failed"
+                msg,
             ))
+            if msg == "decryption failed"
         );
 
         // Because the decryption failed, the identity and session stores were
@@ -2329,6 +2359,7 @@ fn prekey_message_failed_decryption_does_not_update_stores_even_when_previously_
         let mut bob_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &alice_address,
+            &bob_address,
             &mut bob_store.session_store,
             &mut bob_store.identity_store,
             &alice_pre_key_bundle,
@@ -2423,8 +2454,9 @@ fn prekey_message_failed_decryption_does_not_update_stores_even_when_previously_
             .await,
             Err(SignalProtocolError::InvalidMessage(
                 CiphertextMessageType::PreKey,
-                "decryption failed"
+                msg
             ))
+            if msg == "decryption failed"
         );
 
         // Because the decryption failed, the session should still be archived.
@@ -2481,6 +2513,7 @@ fn prekey_message_to_archived_session() -> TestResult {
         // First Bob sends a message to Alice.
         process_prekey_bundle(
             &alice_address,
+            &bob_address,
             &mut bob_store.session_store,
             &mut bob_store.identity_store,
             &alice_pre_key_bundle,
@@ -2509,6 +2542,7 @@ fn prekey_message_to_archived_session() -> TestResult {
         // Alice decides to archive the session and then send a message to Bob on a new session.
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -2846,6 +2880,7 @@ fn test_signedprekey_not_saved() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -3086,6 +3121,7 @@ fn test_longer_sessions() -> TestResult {
 
             process_prekey_bundle(
                 &bob_address,
+                &alice_address,
                 &mut alice_store.session_store,
                 &mut alice_store.identity_store,
                 &bob_pre_key_bundle,
@@ -3095,6 +3131,7 @@ fn test_longer_sessions() -> TestResult {
             .await?;
             process_prekey_bundle(
                 &alice_address,
+                &bob_address,
                 &mut bob_store.session_store,
                 &mut bob_store.identity_store,
                 &alice_pre_key_bundle,
@@ -3217,6 +3254,7 @@ fn test_duplicate_message_error_returned() -> TestResult {
 
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3270,6 +3308,7 @@ fn test_pqr_state_and_message_contents_nonempty() -> TestResult {
 
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3334,6 +3373,7 @@ fn x3dh_prekey_rejected_as_invalid_message_specifically() {
         let mut alice_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3413,6 +3453,7 @@ fn x3dh_established_session_is_or_is_not_usable() {
         let mut alice_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3516,6 +3557,7 @@ fn prekey_message_sent_from_different_user_is_rejected() {
         let mut alice_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3545,7 +3587,8 @@ fn prekey_message_sent_from_different_user_is_rejected() {
             .expect_err("should be rejected");
         assert_matches!(
             err,
-            SignalProtocolError::InvalidMessage(CiphertextMessageType::PreKey, "reused base key")
+            SignalProtocolError::InvalidMessage(CiphertextMessageType::PreKey, msg)
+            if msg == "reused base key"
         );
         assert!(
             bob_store
@@ -3589,6 +3632,7 @@ fn prekey_message_rejects_wrong_local_recipient_address() {
         let mut alice_store = TestStoreBuilder::new().store;
         process_prekey_bundle(
             &bob_address,
+            &alice_address,
             &mut alice_store.session_store,
             &mut alice_store.identity_store,
             &bob_pre_key_bundle,
@@ -3613,7 +3657,8 @@ fn prekey_message_rejects_wrong_local_recipient_address() {
         .expect_err("recipient binding should reject wrong local address");
         assert_matches!(
             err,
-            SignalProtocolError::InvalidMessage(CiphertextMessageType::PreKey, "decryption failed")
+            SignalProtocolError::InvalidMessage(CiphertextMessageType::PreKey, msg)
+            if msg == "decryption failed"
         );
     }
     .now_or_never()
