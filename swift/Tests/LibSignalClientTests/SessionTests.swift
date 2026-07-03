@@ -9,7 +9,8 @@ import XCTest
 typealias InitSession = (
     _ aliceStore: InMemorySignalProtocolStore,
     _ bobStore: InMemorySignalProtocolStore,
-    _ bobAddress: ProtocolAddress
+    _ bobAddress: ProtocolAddress,
+    _ aliceAddress: ProtocolAddress,
 ) -> Void
 
 class SessionTests: TestCaseBase {
@@ -23,7 +24,7 @@ class SessionTests: TestCaseBase {
             let alice_store = InMemorySignalProtocolStore()
             let bob_store = InMemorySignalProtocolStore()
 
-            initSessions(alice_store, bob_store, bob_address)
+            initSessions(alice_store, bob_store, bob_address, alice_address)
 
             // Alice sends a message:
             let ptext_a = Data([8, 6, 7, 5, 3, 0, 9])
@@ -74,6 +75,7 @@ class SessionTests: TestCaseBase {
             let ptext2_a = try! signalDecrypt(
                 message: ctext2_a,
                 from: bob_address,
+                to: alice_address,
                 sessionStore: alice_store,
                 identityStore: alice_store,
                 context: NullContext()
@@ -93,7 +95,7 @@ class SessionTests: TestCaseBase {
             let alice_store = InMemorySignalProtocolStore()
             let bob_store = BadStore()
 
-            initSessions(alice_store, bob_store, bob_address)
+            initSessions(alice_store, bob_store, bob_address, alice_address)
 
             // Alice sends a message:
             let ptext_a: [UInt8] = [8, 6, 7, 5, 3, 0, 9]
@@ -178,6 +180,7 @@ class SessionTests: TestCaseBase {
         try! processPreKeyBundle(
             bob_bundle,
             for: bob_address,
+            ourAddress: alice_address,
             sessionStore: alice_store,
             identityStore: alice_store,
             now: Date(timeIntervalSinceReferenceDate: 0),
@@ -185,8 +188,15 @@ class SessionTests: TestCaseBase {
         )
 
         let initial_session = try! alice_store.loadSession(for: bob_address, context: NullContext())!
-        XCTAssertTrue(initial_session.hasCurrentState(now: Date(timeIntervalSinceReferenceDate: 0)))
-        XCTAssertFalse(initial_session.hasCurrentState(now: Date(timeIntervalSinceReferenceDate: 60 * 60 * 24 * 90)))
+        XCTAssertTrue(
+            initial_session.hasCurrentState(requirePqRatio: 1.0, now: Date(timeIntervalSinceReferenceDate: 0))
+        )
+        XCTAssertFalse(
+            initial_session.hasCurrentState(
+                requirePqRatio: 1.0,
+                now: Date(timeIntervalSinceReferenceDate: 60 * 60 * 24 * 90)
+            )
+        )
 
         // Alice sends a message:
         let ptext_a: [UInt8] = [8, 6, 7, 5, 3, 0, 9]
@@ -204,8 +214,15 @@ class SessionTests: TestCaseBase {
         XCTAssertEqual(ctext_a.messageType, .preKey)
 
         let updated_session = try! alice_store.loadSession(for: bob_address, context: NullContext())!
-        XCTAssertTrue(updated_session.hasCurrentState(now: Date(timeIntervalSinceReferenceDate: 0)))
-        XCTAssertFalse(updated_session.hasCurrentState(now: Date(timeIntervalSinceReferenceDate: 60 * 60 * 24 * 90)))
+        XCTAssertTrue(
+            updated_session.hasCurrentState(requirePqRatio: 1.0, now: Date(timeIntervalSinceReferenceDate: 0))
+        )
+        XCTAssertFalse(
+            updated_session.hasCurrentState(
+                requirePqRatio: 1.0,
+                now: Date(timeIntervalSinceReferenceDate: 60 * 60 * 24 * 90)
+            )
+        )
 
         XCTAssertThrowsError(
             try signalEncrypt(
@@ -285,6 +302,7 @@ class SessionTests: TestCaseBase {
         try! processPreKeyBundle(
             bob_bundle,
             for: bob_address,
+            ourAddress: alice_address,
             sessionStore: alice_store,
             identityStore: alice_store,
             context: NullContext()
@@ -344,7 +362,12 @@ class SessionTests: TestCaseBase {
         let alice_store = InMemorySignalProtocolStore()
         let bob_store = InMemorySignalProtocolStore()
 
-        initializeSessionsV4(alice_store: alice_store, bob_store: bob_store, bob_address: bob_address)
+        initializeSessionsV4(
+            alice_store: alice_store,
+            bob_store: bob_store,
+            bob_address: bob_address,
+            alice_address: alice_address
+        )
 
         let trust_root = IdentityKeyPair.generate()
         let server_keys = IdentityKeyPair.generate()
@@ -479,22 +502,28 @@ class SessionTests: TestCaseBase {
 
     func testArchiveSession() throws {
         let bob_address = try! ProtocolAddress(name: "+14151111112", deviceId: 1)
+        let alice_address = try! ProtocolAddress(name: "+14151111111", deviceId: 1)
 
         let alice_store = InMemorySignalProtocolStore()
         let bob_store = InMemorySignalProtocolStore()
 
-        initializeSessionsV4(alice_store: alice_store, bob_store: bob_store, bob_address: bob_address)
+        initializeSessionsV4(
+            alice_store: alice_store,
+            bob_store: bob_store,
+            bob_address: bob_address,
+            alice_address: alice_address
+        )
 
         let session: SessionRecord! = try! alice_store.loadSession(for: bob_address, context: NullContext())
         XCTAssertNotNil(session)
-        XCTAssertTrue(session.hasCurrentState)
+        XCTAssertTrue(session.hasCurrentState(requirePqRatio: 1.0))
         XCTAssertFalse(try! session.currentRatchetKeyMatches(IdentityKeyPair.generate().publicKey))
         session.archiveCurrentState()
-        XCTAssertFalse(session.hasCurrentState)
+        XCTAssertFalse(session.hasCurrentState(requirePqRatio: 1.0))
         XCTAssertFalse(try! session.currentRatchetKeyMatches(IdentityKeyPair.generate().publicKey))
         // A redundant archive shouldn't break anything.
         session.archiveCurrentState()
-        XCTAssertFalse(session.hasCurrentState)
+        XCTAssertFalse(session.hasCurrentState(requirePqRatio: 1.0))
     }
 
     func testSealedSenderGroupCipher() throws {
@@ -504,7 +533,12 @@ class SessionTests: TestCaseBase {
         let alice_store = InMemorySignalProtocolStore()
         let bob_store = InMemorySignalProtocolStore()
 
-        initializeSessionsV4(alice_store: alice_store, bob_store: bob_store, bob_address: bob_address)
+        initializeSessionsV4(
+            alice_store: alice_store,
+            bob_store: bob_store,
+            bob_address: bob_address,
+            alice_address: alice_address
+        )
 
         let trust_root = IdentityKeyPair.generate()
         let server_keys = IdentityKeyPair.generate()
@@ -630,7 +664,12 @@ class SessionTests: TestCaseBase {
         let alice_store = InMemorySignalProtocolStore()
         let bob_store = InMemorySignalProtocolStore(identity: IdentityKeyPair.generate(), registrationId: 0x4000)
 
-        initializeSessionsV4(alice_store: alice_store, bob_store: bob_store, bob_address: bob_address)
+        initializeSessionsV4(
+            alice_store: alice_store,
+            bob_store: bob_store,
+            bob_address: bob_address,
+            alice_address: alice_address
+        )
 
         let trust_root = IdentityKeyPair.generate()
         let server_keys = IdentityKeyPair.generate()
@@ -700,7 +739,12 @@ class SessionTests: TestCaseBase {
         let alice_store = InMemorySignalProtocolStore()
         let bob_store = InMemorySignalProtocolStore(identity: IdentityKeyPair.generate(), registrationId: 0x2000)
 
-        initializeSessionsV4(alice_store: alice_store, bob_store: bob_store, bob_address: bob_address)
+        initializeSessionsV4(
+            alice_store: alice_store,
+            bob_store: bob_store,
+            bob_address: bob_address,
+            alice_address: alice_address
+        )
 
         let trust_root = IdentityKeyPair.generate()
         let server_keys = IdentityKeyPair.generate()
@@ -774,7 +818,12 @@ class SessionTests: TestCaseBase {
         let bob_store = InMemorySignalProtocolStore()
 
         // Notice the reverse initialization. Bob will send the first message to Alice in this example.
-        initializeSessionsV4(alice_store: bob_store, bob_store: alice_store, bob_address: alice_address)
+        initializeSessionsV4(
+            alice_store: bob_store,
+            bob_store: alice_store,
+            bob_address: alice_address,
+            alice_address: bob_address,
+        )
 
         let bob_first_message = try signalEncrypt(
             message: Array("swim camp".utf8),
@@ -872,7 +921,8 @@ class SessionTests: TestCaseBase {
 private func initializeSessionsV4(
     alice_store: InMemorySignalProtocolStore,
     bob_store: InMemorySignalProtocolStore,
-    bob_address: ProtocolAddress
+    bob_address: ProtocolAddress,
+    alice_address: ProtocolAddress,
 ) {
     let bob_pre_key = PrivateKey.generate()
     let bob_signed_pre_key = PrivateKey.generate()
@@ -911,12 +961,16 @@ private func initializeSessionsV4(
     try! processPreKeyBundle(
         bob_bundle,
         for: bob_address,
+        ourAddress: alice_address,
         sessionStore: alice_store,
         identityStore: alice_store,
         context: NullContext()
     )
 
-    XCTAssertEqual(try! alice_store.loadSession(for: bob_address, context: NullContext())?.hasCurrentState, true)
+    XCTAssertEqual(
+        try! alice_store.loadSession(for: bob_address, context: NullContext())?.hasCurrentState(requirePqRatio: 1.0),
+        true
+    )
     XCTAssertEqual(
         try! alice_store.loadSession(for: bob_address, context: NullContext())?.remoteRegistrationId(),
         try! bob_store.localRegistrationId(context: NullContext())

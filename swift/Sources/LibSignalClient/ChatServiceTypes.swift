@@ -119,6 +119,46 @@ public struct ChatRequest: Equatable, Sendable {
                 }
             }
         }
+
+        internal static func getNextGrpcMessageData(_ body: inout Data) -> Data {
+            var messageOffsets = SignalPairOfu32u32()
+            body.withBorrowed { body in
+                failOnError(
+                    signal_testing_fake_chat_remote_end_next_grpc_message(&messageOffsets, body, 0)
+                )
+            }
+            let message = body.prefix(Int(messageOffsets.second)).dropFirst(Int(messageOffsets.first))
+            body = body.dropFirst(Int(messageOffsets.second))
+            return message
+        }
+        internal static func getNextGrpcMessage(_ name: String, _ body: inout Data) -> NSDictionary {
+            let message = getNextGrpcMessageData(&body)
+            let messageJson = message.withBorrowed { message in
+                failOnError {
+                    try invokeFnReturningString {
+                        signal_testing_fake_chat_remote_end_binproto_to_json($0, name, message)
+                    }
+                }
+            }
+            // Not only is this essentially a testing API, we also know binproto_to_json will always
+            // produce a JSON object, which is decoded as a dictionary.
+            // swiftlint:disable:next force_cast
+            return try! JSONSerialization.jsonObject(with: messageJson.data(using: .utf8)!) as! NSDictionary
+        }
+
+        internal func getSingleGrpcMessage(_ name: String) -> NSDictionary {
+            var body = self.body
+            let result = InternalRequest.getNextGrpcMessage(name, &body)
+            precondition(body.isEmpty, "message had trailing data, use getNextGrpcMessage instead")
+            return result
+        }
+
+        internal func getSingleGrpcMessageData() -> Data {
+            var body = self.body
+            let result = InternalRequest.getNextGrpcMessageData(&body)
+            precondition(body.isEmpty, "message had trailing data, use getNextGrpcMessageData instead")
+            return result
+        }
         #endif
     }
 }
