@@ -6,6 +6,7 @@ FROM docker.io/eclipse-temurin:17.0.19_10-jdk-noble@sha256:6135b2dcc36fc4df1e534
 RUN apt-get install -y --no-install-recommends --update \
       fd-find \
       git \
+      make \
       ripgrep \
       rustup \
       unzip \
@@ -95,26 +96,6 @@ COPY . /libsignal/
 WORKDIR /libsignal
 RUN git clean -ffdx
 
-# Build entrypoint
-RUN cat <<'EOF' > build.sh && chmod +x build.sh
-#!/bin/sh
-set -eu
-
-usage() {
-  echo "Usage: build.sh verify|install|publish|help [args...]"
-}
-
-cmd="${1:-help}"
-[ $# -gt 0 ] && shift
-
-case "$cmd" in
-  verify)  ./java/gradlew -p java build "$@" ;;
-  install) ./java/gradlew -p java publishToMavenLocal "$@" ;;
-  publish) ./java/gradlew -p java publish "$@" ;;
-  help|-h|--help) usage ;;
-  *) echo "unknown command: $cmd" >&2; usage >&2; exit 2 ;;
-esac
-EOF
-
-ENTRYPOINT ["/libsignal/build.sh"]
+# Use Make as the builder entrypoint
+ENTRYPOINT ["make"]
 CMD ["help"]

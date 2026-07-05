@@ -38,6 +38,15 @@ jobs:
 
     - name: Build library inside Docker
       run: |
+        mkdir -p "$RUNNER_TEMP/m2-repository"
         docker run \
           -v "$HOME/.gradle/caches:/.gradle-ro-cache:ro" \
-          libsignal-builder verify
+          -v "$RUNNER_TEMP/m2-repository:/root/.m2/repository" \
+          libsignal-builder assemble
+
+    - name: Export Maven repository
+      uses: actions/upload-artifact@v7
+      with:
+        name: libsignal-maven-local
+        path: "${{ runner.temp }}/m2-repository"
+        if-no-files-found: error
