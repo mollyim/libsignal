@@ -9,28 +9,237 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 28.0.13004108
+  RUST_BACKTRACE: 1
+  # For dev builds, include limited debug info in the output. See
+  # https://doc.rust-lang.org/cargo/reference/profiles.html#debug
+  CARGO_PROFILE_DEV_DEBUG: limited
+
 jobs:
-  test:
-    name: Run tests
-    runs-on: ubuntu-22.04
+
+  rust:
+    name: Rust
+
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [nightly, stable]
+        include:
+        - version: nightly
+          toolchain: "$(cat rust-toolchain)"
+        - version: stable
+          # Extract 'rust-version' value from Cargo.toml.
+          toolchain: "$(yq '.workspace.package.rust-version' $(git rev-parse --show-toplevel)/Cargo.toml)"
+
+    timeout-minutes: 45
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
 
-    - name: Free up disk space in runner
-      uses: ./.github/actions/disk-cleanup
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up JDK 17
+    - run: rustup toolchain install "${{ matrix.toolchain }}" --profile minimal --component rustfmt,clippy
+
+    - name: Build
+      run: cargo +${{ matrix.toolchain }} build --workspace --features libsignal-ffi/signal-media --verbose --keep-going
+
+    - name: Run tests
+      run: cargo +${{ matrix.toolchain }} test --workspace --all-features --verbose --no-fail-fast -- --include-ignored
+
+    - name: Test run benches
+      # Run with a match-all regex to select all the benchmarks, which (confusingly) causes other tests to be skipped.
+      run: cargo +${{ matrix.toolchain }} test --workspace --benches --all-features --verbose --no-fail-fast '.*'
+
+    - name: Build bins and examples
+      run: cargo +${{ matrix.toolchain }} build --workspace  --bins --examples --all-features --verbose --keep-going
+
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets --all-features --keep-going -- -D warnings
+      if: matrix.version == 'nightly'
+
+    - name: Rust docs
+      run: cargo +${{ matrix.toolchain }} doc --workspace --all-features --no-deps --document-private-items --keep-going
+      if: matrix.version == 'stable'
+      env:
+        RUSTDOCFLAGS: -D warnings
+
+  rust32:
+    name: Rust (32-bit testing)
+
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [nightly, stable]
+        include:
+        - version: nightly
+          toolchain: "$(cat rust-toolchain)"
+        - version: stable
+          # Extract 'rust-version' value from Cargo.toml.
+          toolchain: "$(yq '.workspace.package.rust-version' $(git rev-parse --show-toplevel)/Cargo.toml)"
+
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
+
+    - run: sudo apt-get install -U gcc-multilib g++-multilib
+
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - run: rustup toolchain install "${{ matrix.toolchain }}" --profile minimal --target i686-unknown-linux-gnu
+
+    - name: Run tests (32-bit)
+      # Exclude signal-neon-futures because those tests run Node
+      run: cargo +${{ matrix.toolchain }} test --workspace --all-features --verbose --target i686-unknown-linux-gnu --exclude signal-neon-futures --no-fail-fast -- --include-ignored
+      env:
+        CFLAGS: "-msse2" # for BoringSSL
+        CXXFLAGS: "-msse2" # for BoringSSL
+
+  rust-fuzz-build:
+    name: Rust (Fuzz Targets)
+
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
+
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Resolve latest stable MSRV toolchain
+      id: rust-fuzz-build-toolchain
+      run: echo "latest-stable-msrv-toolchain=$(yq '.workspace.package.rust-version' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+    - name: Install Rust stable toolchain
+      run: rustup toolchain install "${{ steps.rust-fuzz-build-toolchain.outputs.latest-stable-msrv-toolchain }}" --profile minimal
+
+    # We check the fuzz targets on stable because they don't have lockfiles,
+    # and crates don't generally support arbitrary nightly versions.
+    # See https://github.com/dtolnay/proc-macro2/issues/307 for an example.
+    - name: Check that the protocol fuzz target still builds
+      run: cargo +${{ steps.rust-fuzz-build-toolchain.outputs.latest-stable-msrv-toolchain }} check --all-targets --keep-going
+      working-directory: rust/protocol/fuzz
+      env:
+        RUSTFLAGS: --cfg fuzzing
+
+    - name: Check that the attest fuzz target still builds
+      run: cargo +${{ steps.rust-fuzz-build-toolchain.outputs.latest-stable-msrv-toolchain }} check --all-targets --keep-going
+      working-directory: rust/attest/fuzz
+      env:
+        RUSTFLAGS: --cfg fuzzing
+
+  rust-fmt:
+    name: Rust (Formatting and Acknowledgments)
+
+    runs-on: ubuntu-24.04
+
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
+
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Resolve pinned nightly toolchain
+      id: rust-fmt-toolchain
+      run: echo "pinned-nightly-toolchain=$(cat rust-toolchain)" >> "$GITHUB_OUTPUT"
+
+    - name: Install pinned nightly toolchain
+      run: rustup toolchain install "${{ steps.rust-fmt-toolchain.outputs.pinned-nightly-toolchain }}" --profile minimal --component rustfmt
+
+    - name: Build cargo-about if needed
+      run: cargo +stable install --version "$(cat acknowledgments/cargo-about-version)" --locked cargo-about --root local-tools
+
+    - name: Build taplo-cli if needed
+      run: cargo +stable install --version "$(cat .taplo-cli-version)" --locked taplo-cli --root local-tools
+
+    # This should be done before anything else
+    # because it also checks that the lockfile is up to date.
+    - name: Check for duplicate dependencies
+      run: ./bin/verify_duplicate_crates
+
+    - name: Cargo.toml formatting check
+      run: PATH="$PATH:$PWD/local-tools/bin" taplo format -c .taplo.toml --check
+
+    - name: Rustfmt check
+      run: cargo +${{ steps.rust-fmt-toolchain.outputs.pinned-nightly-toolchain }} fmt --all -- --check
+
+    - name: Rustfmt check for cross-version-testing
+      run: cargo +${{ steps.rust-fmt-toolchain.outputs.pinned-nightly-toolchain }} fmt --all -- --check
+      working-directory: rust/protocol/cross-version-testing
+
+    - name: Check acknowledgments
+      run: PATH="$PATH:$PWD/local-tools/bin" ./bin/regenerate_acknowledgments.sh --check
+
+  java_android:
+    name: Java Android
+
+    runs-on: ubuntu-24.04
+
+    permissions:
+      # Needed for check_code_size.py to examine previous runs.
+      actions: read
+      contents: read
+
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
+        # Download all commits so we can search for the merge base with origin/main.
+        fetch-depth: 0
+
+    - name: Set up JDK 21
       uses: actions/setup-java@v5
       with:
         distribution: temurin
-        java-version: 17
+        java-version: 21
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v6
 
-    - name: Build and run tests
-      run: ./gradlew build
+    - name: Install NDK
+      run: |
+        "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}"
+
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - run: cargo +stable install --version "$(cat .cbindgen-version)" --locked cbindgen
+
+    - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal --target aarch64-linux-android,armv7-linux-androideabi
+
+    - run: ./gradlew --dependency-verification strict --warning-mode fail :android:build :android:assembleAndroidTest :android:lintDebug :android:packaging-test:assembleDebugAndroidTest :android:benchmarks:assembleReleaseAndroidTest -PandroidArchs=arm,arm64 -x :makeJniLibrariesDesktop | tee ./gradle-output.txt
+      working-directory: java
+      shell: bash # Explicitly setting the shell turns on pipefail in GitHub Actions
 
     - name: Archive reports for failed build
       if: "failure()"
@@ -38,6 +247,69 @@ jobs:
       with:
         name: "reports-${{ github.run_id }}"
         path: |
-          **/build/reports
-          **/build/test-results
+          java/**/build/reports
+          java/**/build/test-results
+        if-no-files-found: ignore
+
+    # Check for -Xcheck:jni warnings manually; Gradle doesn't capture them for some reason.
+    - run: "! grep WARNING ./gradle-output.txt"
+      working-directory: java
+
+    - run: java/check_code_size.py | tee ./check_code_size-output.txt
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - run: grep -v -F '***' ./check_code_size-output.txt >> "$GITHUB_STEP_SUMMARY"
+
+  java_jvm:
+    name: Java JVM
+
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: 21
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+
+    - name: Install protoc
+      run: ./bin/install_protoc_linux
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - run: cargo +stable install cbindgen
+
+      # MOLLY: crossCompileServer=true needs the aarch64 target and cross-compiler
+    - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal --target aarch64-unknown-linux-gnu
+
+    - run: sudo apt-get install -U crossbuild-essential-arm64
+
+    - name: Verify that the JNI bindings are up to date
+      run: rust/bridge/jni/bin/gen_java_decl.py --verify
+
+    - run: ./gradlew --dependency-verification strict -Dorg.gradle.warning.mode=fail build dokkaGenerate -PskipAndroid
+      working-directory: java
+
+    - name: Archive reports for failed build
+      if: "failure()"
+      uses: actions/upload-artifact@v7
+      with:
+        name: "reports-${{ github.run_id }}"
+        path: |
+          java/**/build/reports
+          java/**/build/test-results
         if-no-files-found: ignore

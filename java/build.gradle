@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     id "base"
     id "maven-publish"
+    id "com.diffplug.spotless" version "7.2.1"
 
     id "org.jetbrains.kotlin.jvm" version "2.2.20" apply false
     id "org.jetbrains.dokka" version "2.1.0" apply false
@@ -119,4 +120,29 @@ subprojects {
       }
     }
   }
+}
+
+spotless {
+    kotlin {
+        target allprojects.collectMany {
+            return it.tasks.withType(KotlinCompile)
+        }.inject(files()) { collected, next ->
+            collected + next.sources
+        }
+        targetExclude('**/Native.kt', '**/NativeTesting.kt', '**/org/rustls/**')
+        ktlint()
+    }
+    java {
+        target allprojects.collectMany {
+            return it.tasks.withType(JavaCompile)
+        }.inject(files()) { collected, next ->
+            collected + next.source
+        }
+        importOrder()
+        removeUnusedImports()
+
+        googleJavaFormat()
+        formatAnnotations()
+        licenseHeaderFile rootProject.file('license_header.txt')
+    }
 }
