@@ -8,5 +8,5 @@ GRADLEW := ./java/gradlew -p java
 
 do_assemble = $(strip $(GRADLEW) publishToMavenLocal $(GRADLE_ARGS))
 do_test     = $(strip $(GRADLEW) build $(GRADLE_ARGS))
-do_publish  = $(strip $(GRADLEW) publish $(GRADLE_ARGS))
+do_stage    = $(strip $(GRADLEW) publish $(GRADLE_ARGS))
 do_clean    = $(strip $(GRADLEW) clean $(GRADLE_ARGS))
