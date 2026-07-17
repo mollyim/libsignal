@@ -139,7 +139,7 @@ export type GrpcTestCase<Req, Resp> = {
   method: string;
   request: Req;
   requestGrpc: Uint8Array<ArrayBuffer>;
-  responseGrpc: Uint8Array<ArrayBuffer>;
+  responseGrpc: GrpcTestCaseBridgedResponse;
   response: Resp;
 };
 export type GrpcTestCaseFfi<Req, Resp> = GrpcTestCase<Req, Resp>;
@@ -152,6 +152,18 @@ export const enum LogLevel {
   Debug,
   Trace,
 }
+
+export type ReturnFfiGetDevicesOut = {
+  devices: Array<ReturnFfiLinkedDeviceInternal>;
+};
+
+export type ReturnFfiLinkedDeviceInternal = {
+  id: number;
+  encrypted_name: Uint8Array<ArrayBuffer>;
+  last_seen: Timestamp;
+  registration_id: number;
+  created_at_ciphertext: Uint8Array<ArrayBuffer>;
+};
 
 export type ReturnFfiMyRemoteDeriveEnum =
   | {
@@ -216,6 +228,27 @@ export type ReturnFfiMyTestStruct = {
   my_string_field: string;
 };
 
+export type ReturnFfiRemoveDeviceArgs = {
+  id: number;
+};
+
+export type ReturnFfiRemoveDeviceOut = {
+  __type: 0;
+};
+
+export type ReturnFfiReserveUsernameHashArgs = {
+  usernames: Array<Uint8Array<ArrayBuffer>>;
+};
+
+export type ReturnFfiReserveUsernameHashOut =
+  | {
+      __type: 0;
+      _0: Uint8Array<ArrayBuffer>;
+    }
+  | {
+      __type: 1;
+    };
+
 export type ReturnFfiSetDeviceNameArgs = {
   id: number;
   encrypted_name: Uint8Array<ArrayBuffer>;
@@ -228,6 +261,25 @@ export type ReturnFfiSetDeviceNameOut =
   | {
       __type: 1;
     };
+
+export type ReturnFfiSetUsernameLinkArgs = {
+  username_ciphertext: Uint8Array<ArrayBuffer>;
+  keep_link_handle: boolean;
+};
+
+export type ReturnFfiSetUsernameLinkOut =
+  | {
+      __type: 0;
+      _0: Uint8Array<ArrayBuffer>;
+    }
+  | {
+      __type: 1;
+    };
+
+export type ReturnFfiTestStreamChunk = {
+  chunk: Array<string>;
+  termination: ('finished' | Error) | null;
+};
 
 export type ArgFfiMyRemoteDeriveEnum =
   | {
@@ -292,11 +344,8 @@ export type ArgFfiMyTestStruct = {
   my_string_field: string;
 };
 
-/* eslint-disable comma-dangle */
 export const NetRemoteConfigKeys = [
   'chatRequestConnectionCheckTimeoutMillis',
-  'useH2ForUnauthChat',
-  'useH2ForAuthChat',
   'grpc.AccountsAnonymousLookupUsernameHash',
   'grpc.AccountsAnonymousLookupUsernameLink.2',
   'grpc.AccountsAnonymousCheckAccountExistence.2',
@@ -360,6 +409,10 @@ type NativeFunctions = {
   AuthCredentialWithPni_CheckValidContents: (
     bytes: Uint8Array<ArrayBuffer>
   ) => void;
+  AuthenticatedChatConnection_clear_push_token: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>
+  ) => CancellablePromise<void>;
   AuthenticatedChatConnection_connect: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     connection_manager: Wrapper<ConnectionManager>,
@@ -368,10 +421,22 @@ type NativeFunctions = {
     receive_stories: boolean,
     languages: Array<string>
   ) => CancellablePromise<AuthenticatedChatConnection>;
+  AuthenticatedChatConnection_delete_username_hash: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>
+  ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_delete_username_link: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>
+  ) => CancellablePromise<void>;
   AuthenticatedChatConnection_disconnect: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>
   ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_get_devices: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>
+  ) => CancellablePromise<Array<ReturnFfiLinkedDeviceInternal>>;
   AuthenticatedChatConnection_get_upload_form: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>,
@@ -388,6 +453,16 @@ type NativeFunctions = {
     asyncRuntime: Wrapper<TokioAsyncContext>,
     connection_manager: Wrapper<ConnectionManager>
   ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_remove_device: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>,
+    device_id: number
+  ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_reserve_username_hash: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>,
+    username_hashes: Array<Uint8Array<ArrayBuffer>>
+  ) => CancellablePromise<Uint8Array<ArrayBuffer>>;
   AuthenticatedChatConnection_send: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>,
@@ -427,6 +502,12 @@ type NativeFunctions = {
     device_id: number,
     encrypted_name: Uint8Array<ArrayBuffer>
   ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_set_username_link: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>,
+    username_ciphertext: Uint8Array<ArrayBuffer>,
+    keep_link_handle: boolean
+  ) => CancellablePromise<Uuid>;
   AvatarUploadCredentialPresentation_CheckValidContents: (
     presentation_bytes: Uint8Array<ArrayBuffer>
   ) => void;
@@ -2082,6 +2163,15 @@ type NativeFunctions = {
   TESTING_BridgedStringMap_dump_to_json: (
     map: Wrapper<BridgedStringMap>
   ) => string;
+  TESTING_BulkPullFromStream_Cancel: (stream: Wrapper<TestStream>) => void;
+  TESTING_BulkPullFromStream_New: (
+    contents: Array<string>,
+    end_with_error: boolean
+  ) => TestStream;
+  TESTING_BulkPullFromStream_NextChunk: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    stream: Wrapper<TestStream>
+  ) => CancellablePromise<ReturnFfiTestStreamChunk>;
   TESTING_CdsiLookupErrorConvert: (error_description: string) => void;
   TESTING_CdsiLookupResponseConvert: (
     asyncRuntime: Wrapper<TokioAsyncContext>
@@ -2101,6 +2191,7 @@ type NativeFunctions = {
   TESTING_ChatRequestGetPath: (request: Wrapper<HttpRequest>) => string;
   TESTING_ChatResponseConvert: (body_present: boolean) => ChatResponse;
   TESTING_ChatSendErrorConvert: (error_description: string) => void;
+  TESTING_ClearPushTokenTests: () => Array<GrpcTestCaseFfi<void, void>>;
   TESTING_ConnectionManager_isUsingProxy: (
     manager: Wrapper<ConnectionManager>
   ) => number;
@@ -2119,6 +2210,8 @@ type NativeFunctions = {
     secret: Uint8Array<ArrayBuffer>
   ) => string;
   TESTING_CreateOTPFromBase64: (username: string, secret: string) => string;
+  TESTING_DeleteUsernameHashTests: () => Array<GrpcTestCaseFfi<void, void>>;
+  TESTING_DeleteUsernameLinkTests: () => Array<GrpcTestCaseFfi<void, void>>;
   TESTING_EnableDeterministicRngForTesting: () => void;
   TESTING_ErrorOnBorrowAsync: (_input: null) => Promise<void>;
   TESTING_ErrorOnBorrowIo: (
@@ -2193,6 +2286,12 @@ type NativeFunctions = {
     chat: Wrapper<FakeChatRemoteEnd>,
     response: Wrapper<FakeChatResponse>
   ) => CancellablePromise<void>;
+  TESTING_FakeChatRemoteEnd_SendServerGrpcTestCaseResponse: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<FakeChatRemoteEnd>,
+    id: bigint,
+    response: Wrapper<GrpcTestCaseBridgedResponse>
+  ) => CancellablePromise<void>;
   TESTING_FakeChatRemoteEnd_SendServerResponse: (
     chat: Wrapper<FakeChatRemoteEnd>,
     response: Wrapper<FakeChatResponse>
@@ -2242,6 +2341,9 @@ type NativeFunctions = {
     asyncRuntime: Wrapper<NonSuspendingBackgroundThreadRuntime>,
     input: number
   ) => CancellablePromise<number>;
+  TESTING_GetDevicesTests: () => Array<
+    GrpcTestCaseFfi<void, ReturnFfiGetDevicesOut>
+  >;
   TESTING_InputStreamReadIntoZeroLengthSlice: (
     caps_alphabet_input: InputStream
   ) => Promise<Uint8Array<ArrayBuffer>>;
@@ -2256,6 +2358,16 @@ type NativeFunctions = {
   TESTING_MyRemoteDeriveStruct_identity: (
     x: ArgFfiMyRemoteDeriveStruct
   ) => ReturnFfiMyRemoteDeriveStruct;
+  TESTING_MySimpleTestEnum_BridgeVec_identity: (
+    x: Array<ArgFfiMySimpleTestEnum>
+  ) => Array<ReturnFfiMySimpleTestEnum>;
+  TESTING_MySimpleTestEnum_BridgeVec_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Array<ArgFfiMySimpleTestEnum>
+  ) => CancellablePromise<Array<ReturnFfiMySimpleTestEnum>>;
+  TESTING_MySimpleTestEnum_BridgeVec_to_string: (
+    x: Array<ArgFfiMySimpleTestEnum>
+  ) => string;
   TESTING_MySimpleTestEnum_identity: (
     x: ArgFfiMySimpleTestEnum
   ) => ReturnFfiMySimpleTestEnum;
@@ -2343,7 +2455,18 @@ type NativeFunctions = {
     error_description: string
   ) => void;
   TESTING_RegistrationSessionInfoConvert: () => RegistrationSession;
+  TESTING_RemoveDeviceTests: () => Array<
+    GrpcTestCaseFfi<ReturnFfiRemoveDeviceArgs, ReturnFfiRemoveDeviceOut>
+  >;
+  TESTING_ReserveUsernameHashTests: () => Array<
+    GrpcTestCaseFfi<
+      ReturnFfiReserveUsernameHashArgs,
+      ReturnFfiReserveUsernameHashOut
+    >
+  >;
+  TESTING_ReturnIoError: () => Error;
   TESTING_ReturnPair: () => [number, string];
+  TESTING_ReturnSomeIoError: (present: boolean) => Error | null;
   TESTING_ReturnStringArray: () => Array<string>;
   TESTING_RoundTripI32: (input: number) => number;
   TESTING_RoundTripU16: (input: number) => number;
@@ -2354,10 +2477,14 @@ type NativeFunctions = {
   TESTING_SetDeviceNameTests: () => Array<
     GrpcTestCaseFfi<ReturnFfiSetDeviceNameArgs, ReturnFfiSetDeviceNameOut>
   >;
+  TESTING_SetUsernameLinkTests: () => Array<
+    GrpcTestCaseFfi<ReturnFfiSetUsernameLinkArgs, ReturnFfiSetUsernameLinkOut>
+  >;
   TESTING_SignedPublicPreKey_CheckBridgesCorrectly: (
     source_public_key: Wrapper<PublicKey>,
     signed_pre_key: SignedPublicPreKey
   ) => void;
+  TESTING_TestStreamChunk_return: () => ReturnFfiTestStreamChunk;
   TESTING_TestingHandleType_getValue: (
     handle: Wrapper<TestingHandleType>
   ) => number;
@@ -2372,6 +2499,32 @@ type NativeFunctions = {
     asyncRuntime: Wrapper<TokioAsyncContext>,
     input: number
   ) => CancellablePromise<number>;
+  TESTING_conversion_BridgeVecData32_identity: (
+    x: Array<Uint8Array<ArrayBuffer>>
+  ) => Array<Uint8Array<ArrayBuffer>>;
+  TESTING_conversion_BridgeVecData32_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Array<Uint8Array<ArrayBuffer>>
+  ) => CancellablePromise<Array<Uint8Array<ArrayBuffer>>>;
+  TESTING_conversion_BridgeVecData32_to_string: (
+    x: Array<Uint8Array<ArrayBuffer>>
+  ) => string;
+  TESTING_conversion_BridgeVecString_identity: (
+    x: Array<string>
+  ) => Array<string>;
+  TESTING_conversion_BridgeVecString_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Array<string>
+  ) => CancellablePromise<Array<string>>;
+  TESTING_conversion_BridgeVecString_to_string: (x: Array<string>) => string;
+  TESTING_conversion_Data32_identity: (
+    x: Uint8Array<ArrayBuffer>
+  ) => Uint8Array<ArrayBuffer>;
+  TESTING_conversion_Data32_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Uint8Array<ArrayBuffer>
+  ) => CancellablePromise<Uint8Array<ArrayBuffer>>;
+  TESTING_conversion_Data32_to_string: (x: Uint8Array<ArrayBuffer>) => string;
   TESTING_conversion_Data_VecU8_identity: (
     x: Uint8Array<ArrayBuffer>
   ) => Uint8Array<ArrayBuffer>;
@@ -2390,6 +2543,12 @@ type NativeFunctions = {
     x: Uint8Array<ArrayBuffer>
   ) => CancellablePromise<Uint8Array<ArrayBuffer>>;
   TESTING_conversion_Data_to_string: (x: Uint8Array<ArrayBuffer>) => string;
+  TESTING_conversion_DeviceId_identity: (x: number) => number;
+  TESTING_conversion_DeviceId_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: number
+  ) => CancellablePromise<number>;
+  TESTING_conversion_DeviceId_to_string: (x: number) => string;
   TESTING_conversion_ServiceId_identity: (
     x: Uint8Array<ArrayBuffer>
   ) => Uint8Array<ArrayBuffer>;
@@ -2400,6 +2559,12 @@ type NativeFunctions = {
   TESTING_conversion_ServiceId_to_string: (
     x: Uint8Array<ArrayBuffer>
   ) => string;
+  TESTING_conversion_Uuid_identity: (x: Uuid) => Uuid;
+  TESTING_conversion_Uuid_identity_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Uuid
+  ) => CancellablePromise<Uuid>;
+  TESTING_conversion_Uuid_to_string: (x: Uuid) => string;
   TESTING_conversion_bool_identity: (x: boolean) => boolean;
   TESTING_conversion_bool_identity_async: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
@@ -2691,17 +2856,24 @@ const {
   AuthCredentialPresentation_GetUuidCiphertext,
   AuthCredentialWithPniResponse_CheckValidContents,
   AuthCredentialWithPni_CheckValidContents,
+  AuthenticatedChatConnection_clear_push_token,
   AuthenticatedChatConnection_connect,
+  AuthenticatedChatConnection_delete_username_hash,
+  AuthenticatedChatConnection_delete_username_link,
   AuthenticatedChatConnection_disconnect,
+  AuthenticatedChatConnection_get_devices,
   AuthenticatedChatConnection_get_upload_form,
   AuthenticatedChatConnection_info,
   AuthenticatedChatConnection_init_listener,
   AuthenticatedChatConnection_preconnect,
+  AuthenticatedChatConnection_remove_device,
+  AuthenticatedChatConnection_reserve_username_hash,
   AuthenticatedChatConnection_send,
   AuthenticatedChatConnection_send_message,
   AuthenticatedChatConnection_send_raw_grpc,
   AuthenticatedChatConnection_send_sync_message,
   AuthenticatedChatConnection_set_device_name,
+  AuthenticatedChatConnection_set_username_link,
   AvatarUploadCredentialPresentation_CheckValidContents,
   AvatarUploadCredentialPresentation_GetCm,
   AvatarUploadCredentialPresentation_GetRedemptionTime,
@@ -3149,6 +3321,9 @@ const {
   Svr2_Restore,
   Svr2_StartBackup,
   TESTING_BridgedStringMap_dump_to_json,
+  TESTING_BulkPullFromStream_Cancel,
+  TESTING_BulkPullFromStream_New,
+  TESTING_BulkPullFromStream_NextChunk,
   TESTING_CdsiLookupErrorConvert,
   TESTING_CdsiLookupResponseConvert,
   TESTING_ChatConnectErrorConvert,
@@ -3159,11 +3334,14 @@ const {
   TESTING_ChatRequestGetPath,
   TESTING_ChatResponseConvert,
   TESTING_ChatSendErrorConvert,
+  TESTING_ClearPushTokenTests,
   TESTING_ConnectionManager_isUsingProxy,
   TESTING_ConnectionManager_newLocalOverride,
   TESTING_ConvertOptionalUuid,
   TESTING_CreateOTP,
   TESTING_CreateOTPFromBase64,
+  TESTING_DeleteUsernameHashTests,
+  TESTING_DeleteUsernameLinkTests,
   TESTING_EnableDeterministicRngForTesting,
   TESTING_ErrorOnBorrowAsync,
   TESTING_ErrorOnBorrowIo,
@@ -3187,6 +3365,7 @@ const {
   TESTING_FakeChatRemoteEnd_SendRawServerRequest,
   TESTING_FakeChatRemoteEnd_SendRawServerResponse,
   TESTING_FakeChatRemoteEnd_SendServerGrpcResponse,
+  TESTING_FakeChatRemoteEnd_SendServerGrpcTestCaseResponse,
   TESTING_FakeChatRemoteEnd_SendServerResponse,
   TESTING_FakeChatResponse_Create,
   TESTING_FakeChatServer_Create,
@@ -3199,6 +3378,7 @@ const {
   TESTING_FutureProducesOtherPointerType,
   TESTING_FutureProducesPointerType,
   TESTING_FutureSuccess,
+  TESTING_GetDevicesTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
   TESTING_KeyTransChatSendError,
@@ -3207,6 +3387,9 @@ const {
   TESTING_KeyTransStoredAccountData,
   TESTING_MyRemoteDeriveEnum_identity,
   TESTING_MyRemoteDeriveStruct_identity,
+  TESTING_MySimpleTestEnum_BridgeVec_identity,
+  TESTING_MySimpleTestEnum_BridgeVec_identity_async,
+  TESTING_MySimpleTestEnum_BridgeVec_to_string,
   TESTING_MySimpleTestEnum_identity,
   TESTING_MySimpleTestEnum_identity_async,
   TESTING_MySimpleTestEnum_to_string,
@@ -3244,7 +3427,11 @@ const {
   TESTING_RegistrationService_SubmitVerificationErrorConvert,
   TESTING_RegistrationService_UpdateSessionErrorConvert,
   TESTING_RegistrationSessionInfoConvert,
+  TESTING_RemoveDeviceTests,
+  TESTING_ReserveUsernameHashTests,
+  TESTING_ReturnIoError,
   TESTING_ReturnPair,
+  TESTING_ReturnSomeIoError,
   TESTING_ReturnStringArray,
   TESTING_RoundTripI32,
   TESTING_RoundTripU16,
@@ -3253,22 +3440,39 @@ const {
   TESTING_RoundTripU8,
   TESTING_ServerMessageAck_Create,
   TESTING_SetDeviceNameTests,
+  TESTING_SetUsernameLinkTests,
   TESTING_SignedPublicPreKey_CheckBridgesCorrectly,
+  TESTING_TestStreamChunk_return,
   TESTING_TestingHandleType_getValue,
   TESTING_TestingIntBox_Get,
   TESTING_TestingIntBox_New,
   TESTING_TokioAsyncContext_FutureSuccessBytes,
   TESTING_TokioAsyncContext_NewSingleThreaded,
   TESTING_TokioAsyncFuture,
+  TESTING_conversion_BridgeVecData32_identity,
+  TESTING_conversion_BridgeVecData32_identity_async,
+  TESTING_conversion_BridgeVecData32_to_string,
+  TESTING_conversion_BridgeVecString_identity,
+  TESTING_conversion_BridgeVecString_identity_async,
+  TESTING_conversion_BridgeVecString_to_string,
+  TESTING_conversion_Data32_identity,
+  TESTING_conversion_Data32_identity_async,
+  TESTING_conversion_Data32_to_string,
   TESTING_conversion_Data_VecU8_identity,
   TESTING_conversion_Data_VecU8_identity_async,
   TESTING_conversion_Data_VecU8_to_string,
   TESTING_conversion_Data_identity,
   TESTING_conversion_Data_identity_async,
   TESTING_conversion_Data_to_string,
+  TESTING_conversion_DeviceId_identity,
+  TESTING_conversion_DeviceId_identity_async,
+  TESTING_conversion_DeviceId_to_string,
   TESTING_conversion_ServiceId_identity,
   TESTING_conversion_ServiceId_identity_async,
   TESTING_conversion_ServiceId_to_string,
+  TESTING_conversion_Uuid_identity,
+  TESTING_conversion_Uuid_identity_async,
+  TESTING_conversion_Uuid_to_string,
   TESTING_conversion_bool_identity,
   TESTING_conversion_bool_identity_async,
   TESTING_conversion_bool_to_string,
@@ -3356,17 +3560,24 @@ export {
   AuthCredentialPresentation_GetUuidCiphertext,
   AuthCredentialWithPniResponse_CheckValidContents,
   AuthCredentialWithPni_CheckValidContents,
+  AuthenticatedChatConnection_clear_push_token,
   AuthenticatedChatConnection_connect,
+  AuthenticatedChatConnection_delete_username_hash,
+  AuthenticatedChatConnection_delete_username_link,
   AuthenticatedChatConnection_disconnect,
+  AuthenticatedChatConnection_get_devices,
   AuthenticatedChatConnection_get_upload_form,
   AuthenticatedChatConnection_info,
   AuthenticatedChatConnection_init_listener,
   AuthenticatedChatConnection_preconnect,
+  AuthenticatedChatConnection_remove_device,
+  AuthenticatedChatConnection_reserve_username_hash,
   AuthenticatedChatConnection_send,
   AuthenticatedChatConnection_send_message,
   AuthenticatedChatConnection_send_raw_grpc,
   AuthenticatedChatConnection_send_sync_message,
   AuthenticatedChatConnection_set_device_name,
+  AuthenticatedChatConnection_set_username_link,
   AvatarUploadCredentialPresentation_CheckValidContents,
   AvatarUploadCredentialPresentation_GetCm,
   AvatarUploadCredentialPresentation_GetRedemptionTime,
@@ -3814,6 +4025,9 @@ export {
   Svr2_Restore,
   Svr2_StartBackup,
   TESTING_BridgedStringMap_dump_to_json,
+  TESTING_BulkPullFromStream_Cancel,
+  TESTING_BulkPullFromStream_New,
+  TESTING_BulkPullFromStream_NextChunk,
   TESTING_CdsiLookupErrorConvert,
   TESTING_CdsiLookupResponseConvert,
   TESTING_ChatConnectErrorConvert,
@@ -3824,11 +4038,14 @@ export {
   TESTING_ChatRequestGetPath,
   TESTING_ChatResponseConvert,
   TESTING_ChatSendErrorConvert,
+  TESTING_ClearPushTokenTests,
   TESTING_ConnectionManager_isUsingProxy,
   TESTING_ConnectionManager_newLocalOverride,
   TESTING_ConvertOptionalUuid,
   TESTING_CreateOTP,
   TESTING_CreateOTPFromBase64,
+  TESTING_DeleteUsernameHashTests,
+  TESTING_DeleteUsernameLinkTests,
   TESTING_EnableDeterministicRngForTesting,
   TESTING_ErrorOnBorrowAsync,
   TESTING_ErrorOnBorrowIo,
@@ -3852,6 +4069,7 @@ export {
   TESTING_FakeChatRemoteEnd_SendRawServerRequest,
   TESTING_FakeChatRemoteEnd_SendRawServerResponse,
   TESTING_FakeChatRemoteEnd_SendServerGrpcResponse,
+  TESTING_FakeChatRemoteEnd_SendServerGrpcTestCaseResponse,
   TESTING_FakeChatRemoteEnd_SendServerResponse,
   TESTING_FakeChatResponse_Create,
   TESTING_FakeChatServer_Create,
@@ -3864,6 +4082,7 @@ export {
   TESTING_FutureProducesOtherPointerType,
   TESTING_FutureProducesPointerType,
   TESTING_FutureSuccess,
+  TESTING_GetDevicesTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
   TESTING_KeyTransChatSendError,
@@ -3872,6 +4091,9 @@ export {
   TESTING_KeyTransStoredAccountData,
   TESTING_MyRemoteDeriveEnum_identity,
   TESTING_MyRemoteDeriveStruct_identity,
+  TESTING_MySimpleTestEnum_BridgeVec_identity,
+  TESTING_MySimpleTestEnum_BridgeVec_identity_async,
+  TESTING_MySimpleTestEnum_BridgeVec_to_string,
   TESTING_MySimpleTestEnum_identity,
   TESTING_MySimpleTestEnum_identity_async,
   TESTING_MySimpleTestEnum_to_string,
@@ -3909,7 +4131,11 @@ export {
   TESTING_RegistrationService_SubmitVerificationErrorConvert,
   TESTING_RegistrationService_UpdateSessionErrorConvert,
   TESTING_RegistrationSessionInfoConvert,
+  TESTING_RemoveDeviceTests,
+  TESTING_ReserveUsernameHashTests,
+  TESTING_ReturnIoError,
   TESTING_ReturnPair,
+  TESTING_ReturnSomeIoError,
   TESTING_ReturnStringArray,
   TESTING_RoundTripI32,
   TESTING_RoundTripU16,
@@ -3918,22 +4144,39 @@ export {
   TESTING_RoundTripU8,
   TESTING_ServerMessageAck_Create,
   TESTING_SetDeviceNameTests,
+  TESTING_SetUsernameLinkTests,
   TESTING_SignedPublicPreKey_CheckBridgesCorrectly,
+  TESTING_TestStreamChunk_return,
   TESTING_TestingHandleType_getValue,
   TESTING_TestingIntBox_Get,
   TESTING_TestingIntBox_New,
   TESTING_TokioAsyncContext_FutureSuccessBytes,
   TESTING_TokioAsyncContext_NewSingleThreaded,
   TESTING_TokioAsyncFuture,
+  TESTING_conversion_BridgeVecData32_identity,
+  TESTING_conversion_BridgeVecData32_identity_async,
+  TESTING_conversion_BridgeVecData32_to_string,
+  TESTING_conversion_BridgeVecString_identity,
+  TESTING_conversion_BridgeVecString_identity_async,
+  TESTING_conversion_BridgeVecString_to_string,
+  TESTING_conversion_Data32_identity,
+  TESTING_conversion_Data32_identity_async,
+  TESTING_conversion_Data32_to_string,
   TESTING_conversion_Data_VecU8_identity,
   TESTING_conversion_Data_VecU8_identity_async,
   TESTING_conversion_Data_VecU8_to_string,
   TESTING_conversion_Data_identity,
   TESTING_conversion_Data_identity_async,
   TESTING_conversion_Data_to_string,
+  TESTING_conversion_DeviceId_identity,
+  TESTING_conversion_DeviceId_identity_async,
+  TESTING_conversion_DeviceId_to_string,
   TESTING_conversion_ServiceId_identity,
   TESTING_conversion_ServiceId_identity_async,
   TESTING_conversion_ServiceId_to_string,
+  TESTING_conversion_Uuid_identity,
+  TESTING_conversion_Uuid_identity_async,
+  TESTING_conversion_Uuid_to_string,
   TESTING_conversion_bool_identity,
   TESTING_conversion_bool_identity_async,
   TESTING_conversion_bool_to_string,
@@ -4155,6 +4398,9 @@ export interface GroupPublicParams {
 export interface GroupSecretParams {
   readonly __type: unique symbol;
 }
+export interface GrpcTestCaseBridgedResponse {
+  readonly __type: unique symbol;
+}
 export interface HsmEnclaveClient {
   readonly __type: unique symbol;
 }
@@ -4306,6 +4552,9 @@ export interface SignedPreKeyRecord {
   readonly __type: unique symbol;
 }
 export interface Svr2BackupSession {
+  readonly __type: unique symbol;
+}
+export interface TestStream {
   readonly __type: unique symbol;
 }
 export interface TestingFutureCancellationCounter {

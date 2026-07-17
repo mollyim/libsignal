@@ -5,6 +5,11 @@
 
 import { ProtocolAddress, ServiceId } from './Address.js';
 import * as Native from './Native.js';
+import { newNativeHandle } from './internal.js';
+import {
+  convertNativeRegistrationSessionState,
+  type RegistrationSessionState,
+} from './net/RegistrationSession.js';
 
 export enum ErrorCode {
   Generic,
@@ -86,6 +91,9 @@ export enum ErrorCode {
   RegistrationSessionNotReadyForVerification,
   RegistrationVerificationCodeNotDeliverable,
   RegistrationVerificationSendFailed,
+
+  UsernameNotAvailable,
+  UsernameNotSet,
 }
 
 /** Called out as a separate type so it's not confused with a normal ServiceIdBinary. */
@@ -132,6 +140,7 @@ export class LibSignalErrorBase extends Error {
   public readonly code: ErrorCode;
   public readonly operation: string;
   readonly _addr?: string | Native.ProtocolAddress;
+  readonly _sessionState?: Native.RegistrationSession;
 
   constructor(
     message: string,
@@ -171,6 +180,15 @@ export class LibSignalErrorBase extends Error {
       default:
         throw new TypeError(`cannot get address from this error (${this})`);
     }
+  }
+
+  public get sessionState(): RegistrationSessionState | undefined {
+    if (this._sessionState === undefined) {
+      return undefined;
+    }
+    return convertNativeRegistrationSessionState(
+      newNativeHandle(this._sessionState)
+    );
   }
 
   public toString(): string {
@@ -427,10 +445,12 @@ export type RegistrationRequestRejectedError = LibSignalErrorCommon & {
 export type RegistrationSessionNotReadyForVerificationError =
   LibSignalErrorCommon & {
     code: ErrorCode.RegistrationSessionNotReadyForVerification;
+    readonly sessionState?: RegistrationSessionState;
   };
 
 export type RegistrationVerificationSendFailedError = LibSignalErrorCommon & {
   code: ErrorCode.RegistrationVerificationSendFailed;
+  readonly sessionState?: RegistrationSessionState;
 };
 
 export type RegistrationVerificationCodeNotDeliverableError =
@@ -466,6 +486,10 @@ export type DeviceIdNotFound = LibSignalErrorCommon & {
   code: ErrorCode.DeviceIdNotFound;
 };
 
+export type UsernameNotAvailable = LibSignalErrorCommon & {
+  code: ErrorCode.UsernameNotAvailable;
+};
+
 /**
  * @throws {ChatServiceInactive} if the chat connection has been closed.
  * @throws {IoError} if an error occurred while communicating with the server.
@@ -476,7 +500,9 @@ export type StandardNetworkError =
   | ChatServiceInactive
   | IoError
   | RateLimitedError;
-
+export type UsernameNotSet = LibSignalErrorCommon & {
+  code: ErrorCode.UsernameNotSet;
+};
 export type LibSignalError =
   | GenericError
   | DuplicatedMessageError
@@ -540,4 +566,6 @@ export type LibSignalError =
   | RegistrationDeviceTransferPossibleNotSkippedError
   | RegistrationRecoveryVerificationFailedError
   | RegistrationCredentialsCouldNotBeParsedError
-  | DeviceIdNotFound;
+  | DeviceIdNotFound
+  | UsernameNotAvailable
+  | UsernameNotSet;

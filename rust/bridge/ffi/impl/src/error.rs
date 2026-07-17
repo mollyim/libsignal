@@ -4,13 +4,12 @@
 //
 
 use std::ffi::c_char;
-use std::panic::AssertUnwindSafe;
 
 use libsignal_bridge::ffi::{
     self, NullPointerError, SignalFfiError, run_ffi_safe, write_result_to,
 };
 use libsignal_bridge::{IllegalArgumentError, ffi_arg_type, ffi_result_type};
-use libsignal_bridge_macros::bridge_fn;
+use libsignal_bridge_macros::{bridge_fn, c_export};
 use libsignal_core::ProtocolAddress;
 use libsignal_net::infra::errors::RetryLater;
 use libsignal_net_chat::api::ChallengeOption;
@@ -19,6 +18,7 @@ use uuid::Uuid;
 
 // Not using bridge_fn because it also handles `NULL`.
 #[unsafe(no_mangle)]
+#[c_export]
 pub unsafe extern "C" fn signal_error_get_type(err: *const SignalFfiError) -> u32 {
     match unsafe { err.as_ref() } {
         Some(err) => err.code() as u32,
@@ -80,13 +80,13 @@ fn Error_GetRegistrationErrorNotDeliverable(
 
 // Not using bridge_fn because it returns multiple values.
 #[unsafe(no_mangle)]
+#[c_export]
 pub unsafe extern "C" fn signal_error_get_registration_lock(
     out_time_remaining_seconds: *mut u64,
     out_svr2_username: *mut *const c_char,
     out_svr2_password: *mut *const c_char,
     err: *const SignalFfiError,
 ) -> *mut SignalFfiError {
-    let err = AssertUnwindSafe(err);
     run_ffi_safe(|| {
         let err = unsafe { err.as_ref().ok_or(NullPointerError)? };
 
