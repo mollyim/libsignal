@@ -1,9 +1,13 @@
 name: Test
 
 on:
-  pull_request:
+  pull_request: # all target branches
   push:
     branches:
+      - '**'
+    paths-ignore:
+      - '**/*.md'
+    tags-ignore:
       - '**'
 
 permissions:
