@@ -7,8 +7,7 @@ package org.signal.libsignal.zkgroup.integrationtests;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.signal.libsignal.internal.FilterExceptions.filterExceptions;
+import static org.junit.Assert.assertFalse;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Instant;
@@ -16,7 +15,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.UUID;
 import org.junit.Test;
-import org.signal.libsignal.internal.NativeTesting;
 import org.signal.libsignal.protocol.ServiceId;
 import org.signal.libsignal.protocol.ServiceId.Aci;
 import org.signal.libsignal.protocol.ServiceId.Pni;
@@ -363,6 +361,70 @@ public final class ZkGroupTest extends SecureRandomTest {
   }
 
   @Test
+  public void testAuthZkcWithoutPniIntegration()
+      throws VerificationFailedException, InvalidInputException {
+
+    // Both ACI and salt will be assigned to an account at registration.
+    Aci aci = new Aci(TEST_UUID);
+    byte[] salt = Hex.fromStringCondensedAssert("0102030405");
+    Instant redemptionTime = Instant.now().truncatedTo(ChronoUnit.DAYS);
+
+    // Generate keys (client's are per-group, server's are not)
+    // ---
+
+    // SERVER
+    ServerSecretParams serverSecretParams =
+        ServerSecretParams.generate(createSecureRandom(TEST_ARRAY_32));
+    ServerPublicParams serverPublicParams = serverSecretParams.getPublicParams();
+
+    ServerZkAuthOperations serverZkAuth = new ServerZkAuthOperations(serverSecretParams);
+
+    // CLIENT
+    GroupMasterKey masterKey = new GroupMasterKey(TEST_ARRAY_32_1);
+    GroupSecretParams groupSecretParams = GroupSecretParams.deriveFromMasterKey(masterKey);
+    GroupPublicParams groupPublicParams = groupSecretParams.getPublicParams();
+
+    // SERVER
+    // Issue credential
+    AuthCredentialWithPniResponse authCredentialResponse =
+        serverZkAuth.issueAuthCredentialZkcWithoutPni(
+            createSecureRandom(TEST_ARRAY_32_2), aci, salt, redemptionTime);
+
+    // CLIENT
+    // Receive credential
+    ClientZkAuthOperations clientZkAuthCipher = new ClientZkAuthOperations(serverPublicParams);
+    ClientZkGroupCipher clientZkGroupCipher = new ClientZkGroupCipher(groupSecretParams);
+    AuthCredentialWithPni authCredential =
+        clientZkAuthCipher.receiveAuthCredentialWithoutPni(
+            aci, salt, redemptionTime.getEpochSecond(), authCredentialResponse);
+
+    // Create and decrypt user entry
+    UuidCiphertext aciCiphertext = clientZkGroupCipher.encrypt(aci);
+    ServiceId aciPlaintext = clientZkGroupCipher.decrypt(aciCiphertext);
+    assertEquals(aci, aciPlaintext);
+
+    // CLIENT - Create presentation
+    AuthCredentialPresentation presentation =
+        clientZkAuthCipher.createAuthCredentialPresentation(
+            createSecureRandom(TEST_ARRAY_32_5), groupSecretParams, authCredential);
+    assertEquals(
+        presentation.serialize()[0],
+        3); // Check V4 (versions start from 1 but are encoded starting from 0)
+    assertEquals(presentation.getVersion(), AuthCredentialPresentation.Version.V4);
+
+    // SERVER - Verify presentation, using times at the edge of the acceptable window
+    assertArrayEquals(aciCiphertext.serialize(), presentation.getUuidCiphertext().serialize());
+    assertFalse(
+        Arrays.equals(aciCiphertext.serialize(), presentation.getPniCiphertext().serialize()));
+    assertEquals(presentation.getRedemptionTime(), redemptionTime);
+
+    serverZkAuth.verifyAuthCredentialPresentation(
+        groupPublicParams, presentation, redemptionTime.minus(1, ChronoUnit.DAYS));
+    serverZkAuth.verifyAuthCredentialPresentation(
+        groupPublicParams, presentation, redemptionTime.plus(2, ChronoUnit.DAYS));
+  }
+
+  @Test
   public void testExpiringProfileKeyIntegration()
       throws VerificationFailedException, InvalidInputException, UnsupportedEncodingException {
 
@@ -513,98 +575,6 @@ public final class ZkGroupTest extends SecureRandomTest {
       serverZkProfile.verifyProfileKeyCredentialPresentation(groupPublicParams, v1Presentation);
     } catch (VerificationFailedException e) {
       // expected
-    }
-  }
-
-  // This test (and the corresponding `TESTING` `bridge_fn`) can be deleted when we drop support for
-  // the older presentation version.
-  @Test
-  public void testExpiringProfileKeyPresentationVersions()
-      throws VerificationFailedException, InvalidInputException, UnsupportedEncodingException {
-
-    Aci userId = new Aci(TEST_UUID);
-
-    // Generate keys (client's are per-group, server's are not)
-    // ---
-
-    // SERVER
-    ServerSecretParams serverSecretParams =
-        ServerSecretParams.generate(createSecureRandom(TEST_ARRAY_32));
-    ServerPublicParams serverPublicParams = serverSecretParams.getPublicParams();
-    ServerZkProfileOperations serverZkProfile = new ServerZkProfileOperations(serverSecretParams);
-
-    // CLIENT
-    GroupMasterKey masterKey = new GroupMasterKey(TEST_ARRAY_32_1);
-    GroupSecretParams groupSecretParams = GroupSecretParams.deriveFromMasterKey(masterKey);
-
-    GroupPublicParams groupPublicParams = groupSecretParams.getPublicParams();
-    ClientZkProfileOperations clientZkProfileCipher =
-        new ClientZkProfileOperations(serverPublicParams);
-
-    ProfileKey profileKey = new ProfileKey(TEST_ARRAY_32_1);
-    ProfileKeyCommitment profileKeyCommitment = profileKey.getCommitment(userId);
-
-    // Create context and request
-    ProfileKeyCredentialRequestContext context =
-        clientZkProfileCipher.createProfileKeyCredentialRequestContext(
-            createSecureRandom(TEST_ARRAY_32_3), userId, profileKey);
-    ProfileKeyCredentialRequest request = context.getRequest();
-
-    // SERVER
-    Instant expiration = Instant.now().truncatedTo(ChronoUnit.DAYS).plus(5, ChronoUnit.DAYS);
-    ExpiringProfileKeyCredentialResponse response =
-        serverZkProfile.issueExpiringProfileKeyCredential(
-            createSecureRandom(TEST_ARRAY_32_4), request, userId, profileKeyCommitment, expiration);
-
-    // CLIENT
-    // Gets stored profile credential
-    ClientZkGroupCipher clientZkGroupCipher = new ClientZkGroupCipher(groupSecretParams);
-    ExpiringProfileKeyCredential profileKeyCredential =
-        clientZkProfileCipher.receiveExpiringProfileKeyCredential(context, response);
-
-    // Create encrypted UID and profile key
-    UuidCiphertext uuidCiphertext = clientZkGroupCipher.encrypt(userId);
-    ServiceId plaintext = clientZkGroupCipher.decrypt(uuidCiphertext);
-    assertEquals(plaintext, userId);
-
-    ProfileKeyCiphertext profileKeyCiphertext =
-        clientZkGroupCipher.encryptProfileKey(profileKey, userId);
-    ProfileKey decryptedProfileKey =
-        clientZkGroupCipher.decryptProfileKey(profileKeyCiphertext, userId);
-    assertArrayEquals(profileKey.serialize(), decryptedProfileKey.serialize());
-
-    assertEquals(expiration, profileKeyCredential.getExpirationTime());
-
-    for (var useNewPresentation : new boolean[] {false, true}) {
-      var presentation =
-          filterExceptions(
-              () ->
-                  serverPublicParams.guardedMapChecked(
-                      (serverParams) ->
-                          new ProfileKeyCredentialPresentation(
-                              NativeTesting
-                                  .TESTING_ServerPublicParams_CreateExpiringProfileKeyCredentialPresentationVersionedDeterministic(
-                                      serverParams,
-                                      TEST_ARRAY_32_5,
-                                      groupSecretParams.getInternalContentsForJNI(),
-                                      profileKeyCredential.getInternalContentsForJNI(),
-                                      useNewPresentation))));
-      assertEquals(
-          presentation.getVersion(),
-          useNewPresentation
-              ? ProfileKeyCredentialPresentation.Version.V4
-              : ProfileKeyCredentialPresentation.Version.V3);
-
-      // Verify presentation
-      serverZkProfile.verifyProfileKeyCredentialPresentation(
-          groupPublicParams, presentation, expiration.minusSeconds(5));
-      assertThrows(
-          VerificationFailedException.class,
-          () ->
-              serverZkProfile.verifyProfileKeyCredentialPresentation(
-                  groupPublicParams, presentation, expiration.plusSeconds(5)));
-      UuidCiphertext uuidCiphertextRecv = presentation.getUuidCiphertext();
-      assertArrayEquals(uuidCiphertext.serialize(), uuidCiphertextRecv.serialize());
     }
   }
 

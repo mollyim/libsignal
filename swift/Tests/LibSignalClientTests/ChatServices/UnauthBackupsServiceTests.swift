@@ -44,6 +44,10 @@ private let TEST_AUTH = BackupAuth(
 
 class UnauthBackupsServiceUploadTests: UnauthChatServiceTestBase<any UnauthBackupsServiceImpl> {
     override class var selector: SelectorCheck { .backupsImpl }
+    override var grpcOverrides: [String] {
+        ["BackupsAnonymousGetUploadForm"]
+    }
+
     struct Function: Sendable {
         let impl:
             @Sendable (
@@ -185,140 +189,185 @@ class UnauthBackupsServiceUploadTests: UnauthChatServiceTestBase<any UnauthBacku
 class UnauthBackupsServiceTests: UnauthChatServiceTestBase<any UnauthBackupsServiceImpl> {
     override class var selector: SelectorCheck { .backupsImpl }
 
-    private func testSimpleBackupRequestUnauthorized<Result>(
-        requestName: String,
-        expectedRequest: NSDictionary,
-        responseName: String,
-        sendRequest: @Sendable (any UnauthBackupsServiceImpl) async throws -> Result,
-    ) async {
-        do {
-            _ = try await testSimpleGrpcRequest(
-                requestName: requestName,
-                expectedRequest: expectedRequest,
-                responseName: responseName,
-                // There's no rule that says all the failed authentication responses HAVE to have the same oneof field name.
-                // But in practice they do.
-                response: ["failedAuthentication": ["description": "bad auth"]],
-                sendRequest: sendRequest
-            )
-            XCTFail("should have failed")
-        } catch SignalError.requestUnauthorized(_:) {
-            // expected
-        } catch {
-            XCTFail("unexpected error: \(error)")
-        }
-    }
-
-    private func backupRequest(_ extraProps: [String: Any] = [:]) -> NSDictionary {
-        let result: NSMutableDictionary = [
-            "signedPresentation": [
-                "presentation": EXPECTED_PRESENTATION.base64EncodedString(),
-                "presentationSignature": EXPECTED_SIGNATURE.base64EncodedString(),
-            ]
-        ]
-        result.addEntries(from: extraProps)
-        return result
-    }
-
     func testSetPublicKey() async throws {
-        try await testSimpleGrpcRequest(
-            requestName: "org.signal.chat.backup.SetPublicKeyRequest",
-            expectedRequest: backupRequest(["publicKey": TEST_SIGNING_KEY_PUB.base64EncodedString()]),
-            responseName: "org.signal.chat.backup.SetPublicKeyResponse",
-            response: ["success": [:]],
-        ) {
-            try await $0.setBackupPublicKey(auth: TEST_AUTH, rngForTesting: 0)
-        }
-        await testSimpleBackupRequestUnauthorized(
-            requestName: "org.signal.chat.backup.SetPublicKeyRequest",
-            expectedRequest: backupRequest(["publicKey": TEST_SIGNING_KEY_PUB.base64EncodedString()]),
-            responseName: "org.signal.chat.backup.SetPublicKeyResponse",
-        ) {
-            try await $0.setBackupPublicKey(auth: TEST_AUTH, rngForTesting: 0)
-        }
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_BackupSetPublicKeyTests(),
+            invoke: { api, _ in
+                try await api.setBackupPublicKey(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success:
+                    () = try actual.get()
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
     }
 
     func testGetCdnCredentials() async throws {
-        let credentials = try await testSimpleGrpcRequest(
-            requestName: "org.signal.chat.backup.GetCdnCredentialsRequest",
-            expectedRequest: backupRequest(["cdn": 40]),
-            responseName: "org.signal.chat.backup.GetCdnCredentialsResponse",
-            response: ["cdnCredentials": ["headers": ["b": "bbb", "a": "aaa"]]],
-        ) {
-            try await $0.getBackupCdnCredentials(auth: TEST_AUTH, cdn: 40, rngForTesting: 0)
-        }
-        XCTAssertEqual(credentials.headers, ["a": "aaa", "b": "bbb"])
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_GetBackupCdnCredentialsTests(),
+            invoke: { api, cdn in
+                try await api.getBackupCdnCredentials(auth: TEST_AUTH, cdn: cdn, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success(let expected):
+                    let credentials = try actual.get()
+                    XCTAssertEqual(credentials.headers, expected.headers)
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
+    }
 
-        await testSimpleBackupRequestUnauthorized(
-            requestName: "org.signal.chat.backup.GetCdnCredentialsRequest",
-            expectedRequest: backupRequest(["cdn": 40]),
-            responseName: "org.signal.chat.backup.GetCdnCredentialsResponse",
-        ) {
-            try await $0.getBackupCdnCredentials(auth: TEST_AUTH, cdn: 40, rngForTesting: 0)
-        }
+    func testGetMessageBackupInfo() async throws {
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_GetMessageBackupInfoTests(),
+            invoke: { api, _ in
+                try await api.getMessageBackupInfo(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success(let expected):
+                    XCTAssertEqual(MessageBackupInfo.fromInternal(expected), try actual.get())
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
+    }
+
+    func testGetMediaBackupInfo() async throws {
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_GetMediaBackupInfoTests(),
+            invoke: { api, _ in
+                try await api.getMediaBackupInfo(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success(let expected):
+                    XCTAssertEqual(MediaBackupInfo.fromInternal(expected), try actual.get())
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
     }
 
     func testGetSvrBCredentials() async throws {
-        let credentials: Auth = try await testSimpleGrpcRequest(
-            requestName: "org.signal.chat.backup.GetSvrBCredentialsRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.GetSvrBCredentialsResponse",
-            response: ["svrbCredentials": ["username": "user", "password": "pass"]],
-        ) {
-            try await $0.getBackupSvrBCredentials(auth: TEST_AUTH, rngForTesting: 0)
-        }
-        XCTAssertEqual(credentials.username, "user")
-        XCTAssertEqual(credentials.password, "pass")
-
-        await testSimpleBackupRequestUnauthorized(
-            requestName: "org.signal.chat.backup.GetSvrBCredentialsRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.GetSvrBCredentialsResponse",
-        ) {
-            try await $0.getBackupSvrBCredentials(auth: TEST_AUTH, rngForTesting: 0)
-        }
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_GetBackupSvrBCredentialsTests(),
+            invoke: { api, _ in
+                try await api.getBackupSvrBCredentials(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success(username: let expectedUsername, password: let expectedPassword):
+                    let credentials = try actual.get()
+                    XCTAssertEqual(credentials.username, expectedUsername)
+                    XCTAssertEqual(credentials.password, expectedPassword)
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
     }
 
     func testRefresh() async throws {
-        try await testSimpleGrpcRequest(
-            requestName: "org.signal.chat.backup.RefreshRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.RefreshResponse",
-            response: ["success": [:]],
-        ) {
-            try await $0.refreshBackup(auth: TEST_AUTH, rngForTesting: 0)
-        }
-
-        await testSimpleBackupRequestUnauthorized(
-            requestName: "org.signal.chat.backup.RefreshRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.RefreshResponse",
-        ) {
-            try await $0.refreshBackup(auth: TEST_AUTH, rngForTesting: 0)
-        }
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_BackupRefreshTests(),
+            invoke: { api, _ in
+                try await api.refreshBackup(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success:
+                    () = try actual.get()
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
     }
 
     func testDeleteAll() async throws {
-        try await testSimpleGrpcRequest(
-            requestName: "org.signal.chat.backup.DeleteAllRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.DeleteAllResponse",
-            response: ["success": [:]],
-        ) {
-            try await $0.backupDeleteAll(auth: TEST_AUTH, rngForTesting: 0)
-        }
-
-        await testSimpleBackupRequestUnauthorized(
-            requestName: "org.signal.chat.backup.DeleteAllRequest",
-            expectedRequest: backupRequest(),
-            responseName: "org.signal.chat.backup.DeleteAllResponse",
-        ) {
-            try await $0.backupDeleteAll(auth: TEST_AUTH, rngForTesting: 0)
-        }
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_BackupDeleteAllTests(),
+            invoke: { api, _ in
+                try await api.backupDeleteAll(auth: TEST_AUTH, rngForTesting: 0)
+            },
+            check: { expected, actual in
+                switch expected {
+                case .success:
+                    () = try actual.get()
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
     }
 
     func testCopyMedia() async throws {
-        signal_testing_enable_deterministic_rng_for_testing()
         try await testGrpcCases(
             try NativeTestingNice.TESTING_CopyBackupMediaTests(),
             invoke: { (api, args: [BridgeCopyBackupMediaItem]) in
@@ -361,6 +410,85 @@ class UnauthBackupsServiceTests: UnauthChatServiceTestBase<any UnauthBackupsServ
                 XCTAssertEqual(actualItems, [])
             }
         )
+    }
+
+    func testDeleteMedia() async throws {
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_DeleteBackupMediaTests(),
+            invoke: { (api, args: [BridgeDeleteBackupMediaItem]) in
+                let items = args.map {
+                    DeleteBackupMediaItem($0)
+                }
+                return try await api.deleteBackupMedia(auth: TEST_AUTH, items: items, rngForTesting: 0)
+                    .collectUntilError()
+            },
+            check: { (expected: [DeleteBackupMediaOut], actual) in
+                var (actualItems, maybeError) = try! actual.get()
+                for nextExpected in expected {
+                    switch nextExpected {
+                    case .item(let nextItem):
+                        let actualItem: DeleteBackupMediaItem = actualItems.removeFirst()
+                        XCTAssertEqual(DeleteBackupMediaItem(nextItem), actualItem)
+                    case .invalidDataInStream:
+                        if case SignalError.networkProtocolError(_)? = maybeError {
+                        } else {
+                            XCTFail("expected error not seen: \(maybeError, default: "<none>")")
+                        }
+                    case .credentialRejected:
+                        if case SignalError.requestUnauthorized(_)? = maybeError {
+                        } else {
+                            XCTFail("expected error not seen: \(maybeError, default: "<none>")")
+                        }
+                    case .credentialRejectedWithoutAppropriateServerInfo:
+                        if case SignalError.networkProtocolError(_)? = maybeError {
+                        } else {
+                            XCTFail("expected error not seen: \(maybeError, default: "<none>")")
+                        }
+                    }
+                }
+                XCTAssertEqual(actualItems, [])
+            }
+        )
+    }
+
+    func testListMedia() async throws {
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_BackupListMediaTests(),
+            invoke: { api, args in
+                try await api.listBackupMedia(
+                    auth: TEST_AUTH,
+                    cursor: args.cursor,
+                    limit: args.limit < 0 ? nil : Int(args.limit),
+                    rngForTesting: 0
+                )
+            },
+            check: { expected, actual in
+                switch expected {
+                case .page(let expected):
+                    let response = try actual.get()
+                    XCTAssertEqual(
+                        response.items,
+                        expected.items.map {
+                            .init(cdn: $0.cdn, mediaId: $0.mediaId, objectLength: UInt64($0.objectLength))
+                        }
+                    )
+                    XCTAssertEqual(response.backupDir, expected.backupDir)
+                    XCTAssertEqual(response.mediaDir, expected.mediaDir)
+                    XCTAssertEqual(response.cursor, expected.cursor)
+                case .credentialRejected:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.requestUnauthorized(_) {}
+                case .malformedMediaId, .missingResponse:
+                    do {
+                        _ = try actual.get()
+                        XCTFail("Expected exception")
+                    } catch SignalError.networkProtocolError(_) {}
+                }
+            }
+        )
+
     }
 }
 

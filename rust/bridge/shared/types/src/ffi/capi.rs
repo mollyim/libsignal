@@ -5,6 +5,7 @@
 
 use std::alloc::Layout;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 #[cfg(feature = "metadata")]
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -119,6 +120,8 @@ impl<T> CTypeMemoryLayoutTyped<T> {
 /// 2. Don't call `register_c_type_inner` directly on other types (call `register_c_type`)
 /// 3. The types and typedefs returned from `CType` must correctly model the Rust type
 /// 4. If not treated as opaque, `Self` must have a stable `repr` (e.g. `repr(C)`)
+/// 5. If not opaque, `Self` should not have a destructor, and should be copyable (as in all C
+///    types are copyable; `Self` need not neccessarily implement `Copy`)
 pub unsafe trait IsCType: 'static {
     /// If present, what's the layout for the current type.
     ///
@@ -142,7 +145,7 @@ pub unsafe trait IsCType: 'static {
 }
 
 macro_rules! c_type {
-    ($ty:ty => $layout:expr, $cty:expr $(, $mangled:expr)?) => {
+    ($ty:ty => $layout:expr, $swift_name:expr, $cty:expr $(, $mangled:expr)?) => {
         unsafe impl IsCType for $ty {
             const LAYOUT: Option<CTypeMemoryLayoutTyped<Self>> = $layout;
             #[cfg(feature = "metadata")]
@@ -152,6 +155,7 @@ macro_rules! c_type {
                     dependencies: Default::default(),
                     type_name: $cty.to_string(),
                     ptr_type_name: None,
+                    swift_name: Some($swift_name.to_string()),
                     mangling_component: {
                         #[allow(unused)]
                         let mut out = stringify!($ty);
@@ -170,30 +174,34 @@ const fn prim_layout<T>(size: usize) -> Option<CTypeMemoryLayoutTyped<T>> {
     Some(CTypeMemoryLayoutTyped::new(size, size))
 }
 
-// TODO: is this the right mapping?
-c_type!(() => None, "void", "Unit");
-c_type!(std::ffi::c_void => None, "void", "c_void");
+c_type!(() => None, "()", "void", "Unit");
+c_type!(std::ffi::c_void => None, "()", "void", "c_void");
 
-c_type!(bool => prim_layout(1), "bool");
-c_type!(f32 => prim_layout(4), "float");
-c_type!(f64 => prim_layout(8), "double");
-c_type!(isize => prim_layout(8), "ssize_t");
-c_type!(i8 => prim_layout(1), "int8_t", "c_char");
-c_type!(i16 => prim_layout(2), "int16_t");
-c_type!(i32 => prim_layout(4), "int32_t");
-c_type!(i64 => prim_layout(8), "int64_t");
-c_type!(usize => prim_layout(8), "size_t");
-c_type!(u8 => prim_layout(1), "uint8_t", "c_uchar");
-c_type!(u16 => prim_layout(2), "uint16_t");
-c_type!(u32 => prim_layout(4), "uint32_t");
-c_type!(u64 => prim_layout(8), "uint64_t");
+c_type!(bool => prim_layout(1), "CBool", "bool");
+c_type!(f32 => prim_layout(4), "Float", "float");
+c_type!(f64 => prim_layout(8), "Double", "double");
+c_type!(isize => prim_layout(8), "ssize_t", "ssize_t");
+c_type!(i8 => prim_layout(1), "Int8", "int8_t", "c_char");
+c_type!(i16 => prim_layout(2), "Int16", "int16_t");
+c_type!(i32 => prim_layout(4), "Int32", "int32_t");
+c_type!(i64 => prim_layout(8), "Int64", "int64_t");
+c_type!(usize => prim_layout(8), "size_t", "size_t");
+c_type!(u8 => prim_layout(1), "UInt8", "uint8_t", "c_uchar");
+c_type!(u16 => prim_layout(2), "UInt16", "uint16_t");
+c_type!(u32 => prim_layout(4), "UInt32", "uint32_t");
+c_type!(u64 => prim_layout(8), "UInt64", "uint64_t");
 
 unsafe impl<T: IsCType> IsCType for *const T {
     const LAYOUT: Option<CTypeMemoryLayoutTyped<Self>> = prim_layout(8);
     #[cfg(feature = "metadata")]
     fn register_c_type_inner(ctx: &mut SwiftMetadataContext) -> CType {
         let t = T::register_c_type(ctx);
-        let mut type_name = format!("SignalType_ConstPointer_{}", t.type_name);
+        let mut type_name = format!(
+            "SignalType_ConstPointer_{}",
+            t.type_name
+                .strip_prefix("SignalType_")
+                .unwrap_or(&t.type_name)
+        );
         let mut mangling_component = t.mangling_component.clone();
         if t.rust_type == RustType::of::<std::ffi::c_char>() {
             mangling_component = "CStringPtr".to_string();
@@ -204,6 +212,7 @@ unsafe impl<T: IsCType> IsCType for *const T {
             dependencies: BTreeSet::from_iter([t.rust_type]),
             type_name: type_name.clone(),
             ptr_type_name: Some(format!("const {}*", t.type_name)),
+            swift_name: Some(format!("{type_name}?")),
             // This isn't a good choice, but it stems from the configuration of cbindgen.
             mangling_component,
             utility_typedefs: format!("typedef const {}* {type_name};", t.type_name).into(),
@@ -217,12 +226,18 @@ unsafe impl<T: IsCType> IsCType for *mut T {
     #[cfg(feature = "metadata")]
     fn register_c_type_inner(ctx: &mut SwiftMetadataContext) -> CType {
         let t = T::register_c_type(ctx);
-        let type_name = format!("SignalType_MutPointer_{}", t.type_name);
+        let type_name = format!(
+            "SignalType_MutPointer_{}",
+            t.type_name
+                .strip_prefix("SignalType_")
+                .unwrap_or(&t.type_name)
+        );
         CType {
             rust_type: RustType::of::<Self>(),
             dependencies: BTreeSet::from_iter([t.rust_type]),
             type_name: type_name.clone(),
             ptr_type_name: Some(format!("{}*", t.type_name)),
+            swift_name: Some(format!("{type_name}?")),
             // This isn't a good choice, but it stems from the configuration of cbindgen.
             mangling_component: t.mangling_component.clone(),
             utility_typedefs: format!("typedef {}* {type_name};", t.type_name).into(),
@@ -239,12 +254,18 @@ unsafe impl<T: IsCType, const N: usize> IsCType for [T; N] {
     #[cfg(feature = "metadata")]
     fn register_c_type_inner(ctx: &mut SwiftMetadataContext) -> CType {
         let t = T::register_c_type(ctx);
-        let type_name = format!("SignalType_FixedArray{N}_{}", t.type_name);
+        let type_name = format!(
+            "SignalType_FixedArray{N}_{}",
+            t.type_name
+                .strip_prefix("SignalType_")
+                .unwrap_or(&t.type_name)
+        );
         CType {
             rust_type: RustType::of::<Self>(),
             dependencies: BTreeSet::from_iter([t.rust_type]),
             type_name: type_name.clone(),
             ptr_type_name: None,
+            swift_name: None,
             // This isn't a good choice, but it stems from the configuration of cbindgen.
             mangling_component: format!("{}{N}", t.mangling_component),
             utility_typedefs: format!("typedef {} {type_name}[{N}];", t.type_name).into(),
@@ -268,8 +289,8 @@ macro_rules! function_types {
                 };
                 let type_name = format!(
                     "SignalType_{unsafe_}FunctionPointer_{}_{}",
-                    rt.type_name,
-                    args.iter().map(|arg| &arg.type_name).join("_")
+                    rt.type_name.strip_prefix("SignalType_").unwrap_or(&rt.type_name),
+                    args.iter().map(|arg| arg.type_name.strip_prefix("SignalType_").unwrap_or(&arg.type_name)).join("_")
                 );
                 CType {
                     rust_type: RustType::of::<Self>(),
@@ -278,6 +299,7 @@ macro_rules! function_types {
                     ),
                     type_name: type_name.clone(),
                     ptr_type_name: None,
+                    swift_name: Some(format!("{type_name}?")),
                     // We didn't use function pointers in generics with cbindgen, so we can do
                     // whatever we want here.
                     mangling_component: type_name.clone(),
@@ -311,4 +333,26 @@ function_types! {
     [A, B, C, D, E],
     [A, B, C, D, E, F],
     [A, B, C, D, E, F, G],
+}
+
+unsafe impl<T: IsCType> IsCType for MaybeUninit<T> {
+    const LAYOUT: Option<CTypeMemoryLayoutTyped<Self>> = match T::LAYOUT {
+        None => None,
+        Some(x) => Some(CTypeMemoryLayoutTyped::new(x.size(), x.align())),
+    };
+    #[cfg(feature = "metadata")]
+    fn register_c_type_inner(ctx: &mut SwiftMetadataContext) -> CType {
+        let inner = T::register_c_type(ctx);
+        let type_name = format!("MaybeUninitOf{}", inner.mangling_component);
+        CType {
+            rust_type: RustType::of::<Self>(),
+            dependencies: BTreeSet::from_iter([RustType::of::<T>()]),
+            type_name: type_name.clone(),
+            swift_name: None,
+            ptr_type_name: None,
+            mangling_component: type_name.clone(),
+            utility_typedefs: format!("typedef {} {type_name};", inner.ptr_type_name()).into(),
+            layout: Self::LAYOUT.map(|layout| layout.layout()),
+        }
+    }
 }

@@ -77,7 +77,8 @@ impl ConnectUnauthChat for ConnectFakeChat {
         let mut on_disconnect = Some(on_disconnect);
         let listener = move |event| match event {
             libsignal_net::chat::ws::ListenerEvent::Finished(_) => drop(on_disconnect.take()),
-            libsignal_net::chat::ws::ListenerEvent::ReceivedAlerts(_)
+            libsignal_net::chat::ws::ListenerEvent::ServerTimestamp(_)
+            | libsignal_net::chat::ws::ListenerEvent::ReceivedAlerts(_)
             | libsignal_net::chat::ws::ListenerEvent::ReceivedMessage(_, _) => (),
         };
 
@@ -110,8 +111,8 @@ async fn TESTING_FakeRegistrationSession_CreateSession(
 fn TESTING_RegisterAccountResponse_CreateTestValue() -> RegisterAccountResponse {
     RegisterAccountResponse {
         aci: uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").into(),
-        number: "+18005550123".to_owned(),
-        pni: uuid!("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").into(),
+        number: Some("+18005550123".to_owned()),
+        pni: Some(uuid!("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").into()),
         username_hash: Some((*b"username-hash").into()),
         username_link_handle: Some(uuid!("55555555-5555-5555-5555-555555555555")),
         storage_capable: true,
@@ -135,25 +136,34 @@ fn TESTING_RegisterAccountResponse_CreateTestValue() -> RegisterAccountResponse 
             }),
         },
         reregistration: true,
+        auth_credential_salt: None,
+    }
+}
+
+#[bridge_fn]
+fn TESTING_RegisterAccountResponse_CreateTestValueWithoutPhoneNumber() -> RegisterAccountResponse {
+    RegisterAccountResponse {
+        aci: uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").into(),
+        number: None,
+        pni: None,
+        username_hash: None,
+        username_link_handle: None,
+        storage_capable: false,
+        entitlements: RegisterResponseEntitlements::default(),
+        reregistration: false,
+        auth_credential_salt: Some((*b"auth-credential-salt").into()),
     }
 }
 
 // Use aliases so that places that refer to syntactic argument names (e.g.
 // jni::jni_arg and friends) aren't ambiguous.
-/// cbindgen:ignore
 type TestingCreateSessionRequestError = TestingRequestError<TestingCreateSessionError>;
-/// cbindgen:ignore
 type TestingResumeSessionRequestError = TestingRequestError<TestingResumeSessionError>;
-/// cbindgen:ignore
 type TestingUpdateSessionRequestError = TestingRequestError<TestingUpdateSessionError>;
-/// cbindgen:ignore
 type TestingRequestVerificationCodeRequestError =
     TestingRequestError<TestingRequestVerificationCodeError>;
-/// cbindgen:ignore
 type TestingSubmitVerificationRequestError = TestingRequestError<TestingSubmitVerificationError>;
-/// cbindgen:ignore
 type TestingRegisterAccountRequestError = TestingRequestError<TestingRegisterAccountError>;
-/// cbindgen:ignore
 type TestingCheckSvr2CredentialsRequestError =
     TestingRequestError<TestingCheckSvr2CredentialsError>;
 
@@ -381,6 +391,11 @@ make_error_testing_enum!(
         DeviceTransferIsPossibleButNotSkipped => DeviceTransferIsPossibleButNotSkipped,
         RegistrationRecoveryVerificationFailed => RegistrationRecoveryVerificationFailed,
         RegistrationLock => RegistrationLockFor50Seconds,
+        RequestRejected => RequestRejected,
+        InvalidSession => InvalidSession,
+        InvalidReceipt => InvalidReceipt,
+        RecoveryPasswordRequired => RecoveryPasswordRequired,
+        OneTimePasswordRequired => OneTimePasswordRequired,
     }
 );
 
@@ -402,11 +417,20 @@ fn TESTING_RegistrationService_RegisterAccountErrorConvert(
             TestingRegisterAccountError::RegistrationLockFor50Seconds => {
                 RegisterAccountError::RegistrationLock(RegistrationLock {
                     time_remaining: Duration::from_secs(50),
-                    svr2_credentials: Auth {
+                    svr2_credentials: Some(Auth {
                         username: "user".to_owned(),
                         password: "pass".to_owned(),
-                    },
+                    }),
                 })
+            }
+            TestingRegisterAccountError::RequestRejected => RegisterAccountError::RequestRejected,
+            TestingRegisterAccountError::InvalidSession => RegisterAccountError::InvalidSession,
+            TestingRegisterAccountError::InvalidReceipt => RegisterAccountError::InvalidReceipt,
+            TestingRegisterAccountError::RecoveryPasswordRequired => {
+                RegisterAccountError::RecoveryPasswordRequired
+            }
+            TestingRegisterAccountError::OneTimePasswordRequired => {
+                RegisterAccountError::OneTimePasswordRequired
             }
         }))
 }

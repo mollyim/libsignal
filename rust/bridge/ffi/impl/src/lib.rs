@@ -8,8 +8,8 @@
 
 use std::ffi::{CString, c_char, c_uchar};
 
+use libsignal_bridge::IllegalArgumentError;
 use libsignal_bridge::ffi::{self, *};
-use libsignal_bridge::{IllegalArgumentError, ffi_arg_type};
 use libsignal_bridge_macros::{bridge_fn, c_export};
 #[cfg(feature = "libsignal-bridge-testing")]
 #[allow(unused_imports)]
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn signal_free_buffer(buf: *const c_uchar, buf_len: usize)
 #[unsafe(no_mangle)]
 #[c_export]
 pub unsafe extern "C" fn signal_free_owned_buffer_of_max_aligned(
-    buffer: OwnedBufferOfMaxAligned<std::ffi::c_void>,
+    buffer: OwnedBufferOfMaxAlignedErased,
 ) {
     if buffer.base.is_null() || buffer.size_bytes == 0 {
         return;

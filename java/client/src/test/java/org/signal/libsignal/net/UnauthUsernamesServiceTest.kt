@@ -5,12 +5,14 @@
 
 package org.signal.libsignal.net
 
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import org.signal.libsignal.internal.LookUpUsernameLinkOut
+import org.signal.libsignal.internal.NativeTestingNice
 import org.signal.libsignal.internal.TokioAsyncContext
+import org.signal.libsignal.net.assertNonSuccess
 import org.signal.libsignal.protocol.ServiceId.Aci
 import org.signal.libsignal.protocol.util.Hex
 import org.signal.libsignal.usernames.Username
@@ -20,9 +22,11 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 import kotlin.io.encoding.Base64
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class UnauthUsernamesServiceTest {
   companion object {
+    val GRPC_OVERRIDES = arrayOf("AccountsAnonymousLookupUsernameHash", "AccountsAnonymousLookupUsernameLink")
     val EXPECTED_USERNAME = "moxie.01"
     val ENCRYPTED_USERNAME =
       "kj5ah-VbEgjpfJsNt-Wto2H626DRmJSVpYPy0yPOXA8kiSFkBCD8ysFlJ-Z3MhiAnt_R3Nm7ZY0W5fiRDLVbhaE2z-KO2xdf5NcVbkewCzhvveecS3hHskDp1aSfbvwTZNNGPmAuKWvJ1MPdHzsF0w"
@@ -39,6 +43,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -84,6 +89,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -121,6 +127,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -155,6 +162,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -189,6 +197,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -231,6 +240,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -265,6 +275,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -306,6 +317,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -340,6 +352,7 @@ class UnauthUsernamesServiceTest {
       UnauthenticatedChatConnection.fakeConnect(
         tokioAsyncContext,
         NoOpListener(),
+        GRPC_OVERRIDES,
         Network.Environment.STAGING,
       )
 
@@ -360,45 +373,39 @@ class UnauthUsernamesServiceTest {
 
 class UnauthUsernamesServiceGrpcTest {
   @Test
-  fun testUsernameLinkLookup() {
-    val tokioAsyncContext = TokioAsyncContext()
-    val (chat, fakeRemote) =
-      UnauthenticatedChatConnection.fakeConnect(
-        tokioAsyncContext,
-        NoOpListener(),
-        arrayOf("AccountsAnonymousLookupUsernameLink"),
-        Network.Environment.STAGING,
+  fun testUsernameLinkLookup() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_LookUpUsernameLinkTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(
+            tokio,
+            listener,
+            Network.Environment.STAGING,
+          )
+        },
+        ::UnauthUsernamesService,
+        invoke = { chat, req ->
+          chat.lookUpUsernameLink(
+            uuid = req.uuid,
+            entropy = req.entropy,
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is LookUpUsernameLinkOut.Success ->
+              assertEquals(
+                expected._0,
+                assertIs<RequestResult.Success<Username?>>(actual, actual.toString()).result?.username,
+              )
+            LookUpUsernameLinkOut.NotFound ->
+              assertNull(assertIs<RequestResult.Success<Username?>>(actual).result)
+            LookUpUsernameLinkOut.LinkDataTooShort ->
+              actual.assertNonSuccess<_, _, UsernameLinkInvalidLinkData>()
+            LookUpUsernameLinkOut.MissingResponse ->
+              assertIs<RequestResult.ApplicationError>(actual)
+          }
+        },
       )
-
-    val accountsService = UnauthUsernamesService(chat)
-    val responseFuture =
-      accountsService.lookUpUsernameLink(
-        UUID(0, 0),
-        UnauthUsernamesServiceTest.ENCRYPTED_USERNAME_ENTROPY,
-      )
-
-    // Get the incoming request from the fake remote
-    val (request, requestId) = fakeRemote.getNextIncomingGrpcRequest().get()
-    assertEquals(
-      request.getSingleGrpcMessage("org.signal.chat.account.LookupUsernameLinkRequest"),
-      buildJsonObject {
-        put("usernameLinkHandle", "AAAAAAAAAAAAAAAAAAAAAA==")
-      },
-    )
-
-    // Send successful response
-    fakeRemote.sendGrpcResponse(
-      requestId,
-      "org.signal.chat.account.LookupUsernameLinkResponse",
-      buildJsonObject {
-        put("usernameCiphertext", UnauthUsernamesServiceTest.ENCRYPTED_USERNAME)
-      },
-    )
-
-    // Verify the result
-    val result = responseFuture.get()
-    val successResult = assertIs<RequestResult.Success<Username?>>(result)
-    assertNotNull(successResult.result)
-    assertEquals(UnauthUsernamesServiceTest.EXPECTED_USERNAME, successResult.result!!.username)
-  }
+    }
 }

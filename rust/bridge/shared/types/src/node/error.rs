@@ -12,6 +12,7 @@ use libsignal_net_chat::api::backups::{BackupAuthCredentialRejected, GetUploadFo
 use libsignal_net_chat::api::keys::GetPreKeysFailure;
 use libsignal_net_chat::api::messages::UploadTooLarge;
 use libsignal_net_chat::grpc::devices::DeviceIdNotFoundInAccount;
+use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::UsernameNotAvailable;
 use neon::thread::LocalKey;
 #[cfg(feature = "signal-media")]
@@ -113,6 +114,12 @@ impl std::fmt::Display for ThrownException {
 
 impl std::error::Error for ThrownException {}
 
+/// Describes how to convert a Rust error into a JavaScript error.
+///
+/// Errors that do not delegate to other errors, customize their messages, or provide extra
+/// properties can implement [`SimpleNodeError`] instead.
+///
+/// See also `Errors.ts`.
 pub trait SignalNodeError {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError>;
 }
@@ -122,12 +129,19 @@ pub trait SignalNodeError {
 /// Implementing types get a straightforward blanket implementation of
 /// [`SignalNodeError`] that converts to a generic error with
 /// [`self.to_string()`](ToString::to_string) as the error message.
-pub trait DefaultSignalNodeError: ToString {}
+pub trait SimpleNodeError: ToString {
+    /// The specific error code the resulting object will use, with `None` representing a generic
+    /// failure.
+    fn js_error_name(&self) -> Option<&'static str> {
+        None
+    }
+}
 
-impl<S: DefaultSignalNodeError> SignalNodeError for S {
+impl<S: SimpleNodeError> SignalNodeError for S {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
         let message = self.to_string();
-        new_js_error(cx, None, &message, operation_name, no_extra_properties)
+        let name = self.js_error_name();
+        new_js_error(cx, name, &message, operation_name, no_extra_properties)
     }
 }
 
@@ -135,7 +149,7 @@ const INVALID_MEDIA_INPUT: &str = "InvalidMediaInput";
 const IO_ERROR: &str = "IoError";
 const UNSUPPORTED_MEDIA_INPUT: &str = "UnsupportedMediaInput";
 
-impl DefaultSignalNodeError for IllegalArgumentError {}
+impl SimpleNodeError for IllegalArgumentError {}
 
 impl SignalNodeError for SignalProtocolError {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
@@ -230,17 +244,17 @@ impl SignalNodeError for SignalProtocolError {
     }
 }
 
-impl DefaultSignalNodeError for libsignal_protocol::FingerprintError {}
+impl SimpleNodeError for libsignal_protocol::FingerprintError {}
 
-impl DefaultSignalNodeError for device_transfer::Error {}
+impl SimpleNodeError for device_transfer::Error {}
 
-impl DefaultSignalNodeError for attest::hsm_enclave::Error {}
+impl SimpleNodeError for attest::hsm_enclave::Error {}
 
-impl DefaultSignalNodeError for attest::enclave::Error {}
+impl SimpleNodeError for attest::enclave::Error {}
 
-impl DefaultSignalNodeError for signal_crypto::Error {}
+impl SimpleNodeError for signal_crypto::Error {}
 
-impl DefaultSignalNodeError for libsignal_account_keys::Error {}
+impl SimpleNodeError for libsignal_account_keys::Error {}
 
 impl SignalNodeError for libsignal_net::svr2::Error {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
@@ -248,7 +262,6 @@ impl SignalNodeError for libsignal_net::svr2::Error {
             Self::Service(_)
             | Self::AllConnectionAttemptsFailed
             | Self::Connect(_)
-            | Self::EnclaveNotFound
             | Self::Protocol(_) => (Some(IO_ERROR), None),
             Self::RateLimited(inner) => return inner.into_throwable(cx, operation_name),
             Self::AttestationError(_) => (Some("SvrAttestationError"), None),
@@ -265,6 +278,8 @@ impl SignalNodeError for libsignal_net::svr2::Error {
                 )
             }
             Self::DataMissing => (Some("SvrDataMissing"), None),
+            Self::DecryptionError => (Some("SvrInvalidData"), None),
+            Self::DataMismatch => (Some("SvrDataMismatch"), None),
         };
 
         let message = self.to_string();
@@ -307,13 +322,13 @@ impl SignalNodeError for libsignal_net::svrb::Error {
     }
 }
 
-impl DefaultSignalNodeError for zkgroup::ZkGroupVerificationFailure {}
+impl SimpleNodeError for zkgroup::ZkGroupVerificationFailure {}
 
-impl DefaultSignalNodeError for zkgroup::ZkGroupDeserializationFailure {}
+impl SimpleNodeError for zkgroup::ZkGroupDeserializationFailure {}
 
-impl SignalNodeError for usernames::UsernameError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = match &self {
+impl SimpleNodeError for usernames::UsernameError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
             Self::BadNicknameCharacter => "BadNicknameCharacter",
             Self::NicknameTooShort => "NicknameTooShort",
             Self::NicknameTooLong => "NicknameTooLong",
@@ -326,39 +341,29 @@ impl SignalNodeError for usernames::UsernameError {
             Self::DiscriminatorCannotHaveLeadingZeros => "DiscriminatorCannotHaveLeadingZeros",
             Self::BadDiscriminatorCharacter => "BadDiscriminatorCharacter",
             Self::DiscriminatorTooLarge => "DiscriminatorTooLarge",
-        };
-        let message = self.to_string();
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
-impl DefaultSignalNodeError for usernames::ProofVerificationFailure {}
+impl SimpleNodeError for usernames::ProofVerificationFailure {}
 
-impl SignalNodeError for usernames::UsernameLinkError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = match &self {
+impl SimpleNodeError for usernames::UsernameLinkError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        match self {
             Self::InputDataTooLong => Some("InputDataTooLong"),
             Self::InvalidEntropyDataLength => Some("InvalidEntropyDataLength"),
             Self::UsernameLinkDataTooShort
             | Self::HmacMismatch
             | Self::BadCiphertext
             | Self::InvalidDecryptedDataStructure => Some("InvalidUsernameLinkEncryptedData"),
-        };
-        let message = self.to_string();
-        new_js_error(cx, name, &message, operation_name, no_extra_properties)
+        }
     }
 }
 
 #[cfg(feature = "signal-media")]
-impl SignalNodeError for Mp4Error {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = match &self {
+impl SimpleNodeError for Mp4Error {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
             Mp4Error::Io(_) => IO_ERROR,
             Mp4Error::Parse(err) => match err.kind {
                 Mp4ParseError::InvalidBoxLayout
@@ -369,22 +374,14 @@ impl SignalNodeError for Mp4Error {
                 | Mp4ParseError::UnsupportedBoxLayout
                 | Mp4ParseError::UnsupportedFormat(_) => UNSUPPORTED_MEDIA_INPUT,
             },
-        };
-        let message = self.to_string();
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
 #[cfg(feature = "signal-media")]
-impl SignalNodeError for WebpError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = match &self {
+impl SimpleNodeError for WebpError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
             WebpError::Io(_) => IO_ERROR,
             WebpError::Parse(err) => match err.kind {
                 WebpParseError::InvalidChunkLayout
@@ -396,15 +393,7 @@ impl SignalNodeError for WebpError {
                     UNSUPPORTED_MEDIA_INPUT
                 }
             },
-        };
-        let message = self.to_string();
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
@@ -470,9 +459,9 @@ impl SignalNodeError for libsignal_net::chat::ConnectError {
     }
 }
 
-impl SignalNodeError for libsignal_net::chat::SendError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = match self {
+impl SimpleNodeError for libsignal_net::chat::SendError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        match self {
             Self::Disconnected => Some("ChatServiceInactive"),
             Self::ConnectionInvalidated => Some("ConnectionInvalidated"),
             Self::ConnectedElsewhere => Some("ConnectedElsewhere"),
@@ -484,9 +473,7 @@ impl SignalNodeError for libsignal_net::chat::SendError {
             {
                 Some(IO_ERROR)
             }
-        };
-        let message = self.to_string();
-        new_js_error(cx, name, &message, operation_name, no_extra_properties)
+        }
     }
 }
 
@@ -546,11 +533,9 @@ impl SignalNodeError for libsignal_net_chat::api::RateLimitChallenge {
     }
 }
 
-impl SignalNodeError for http::uri::InvalidUri {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let name = Some("InvalidUri");
-        let message = self.to_string();
-        new_js_error(cx, name, &message, operation_name, no_extra_properties)
+impl SimpleNodeError for http::uri::InvalidUri {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("InvalidUri")
     }
 }
 
@@ -611,49 +596,24 @@ impl SignalNodeError for std::convert::Infallible {
     }
 }
 
-impl SignalNodeError for UploadTooLarge {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        new_js_error(
-            cx,
-            Some("UploadTooLarge"),
-            &self.to_string(),
-            operation_name,
-            no_extra_properties,
-        )
+impl SimpleNodeError for UploadTooLarge {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("UploadTooLarge")
     }
 }
 
-impl SignalNodeError for GetUploadFormFailure {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let msg = self.to_string();
+impl SimpleNodeError for GetUploadFormFailure {
+    fn js_error_name(&self) -> Option<&'static str> {
         match self {
-            GetUploadFormFailure::Unauthorized => new_js_error(
-                cx,
-                Some("RequestUnauthorized"),
-                &msg,
-                operation_name,
-                no_extra_properties,
-            ),
-            GetUploadFormFailure::UploadTooLarge => new_js_error(
-                cx,
-                Some("UploadTooLarge"),
-                &msg,
-                operation_name,
-                no_extra_properties,
-            ),
+            GetUploadFormFailure::Unauthorized => Some("RequestUnauthorized"),
+            GetUploadFormFailure::UploadTooLarge => Some("UploadTooLarge"),
         }
     }
 }
 
-impl SignalNodeError for BackupAuthCredentialRejected {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        new_js_error(
-            cx,
-            Some("RequestUnauthorized"),
-            &self.to_string(),
-            operation_name,
-            no_extra_properties,
-        )
+impl SimpleNodeError for BackupAuthCredentialRejected {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("RequestUnauthorized")
     }
 }
 
@@ -744,27 +704,15 @@ impl SignalNodeError for libsignal_net_chat::api::messages::SealedSendFailure {
     }
 }
 
-impl SignalNodeError for DeviceIdNotFoundInAccount {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        new_js_error(
-            cx,
-            Some("DeviceIdNotFound"),
-            &self.to_string(),
-            operation_name,
-            no_extra_properties,
-        )
+impl SimpleNodeError for DeviceIdNotFoundInAccount {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("DeviceIdNotFound")
     }
 }
 
-impl SignalNodeError for UsernameNotAvailable {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        new_js_error(
-            cx,
-            Some("UsernameNotAvailable"),
-            &self.to_string(),
-            operation_name,
-            no_extra_properties,
-        )
+impl SimpleNodeError for UsernameNotAvailable {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("UsernameNotAvailable")
     }
 }
 
@@ -786,6 +734,15 @@ impl SignalNodeError for libsignal_net_chat::api::messages::UnsealedSendFailure 
                 operation_name,
                 extra_props_for_mismatched_devices([mismatched_device_error]),
             ),
+        }
+    }
+}
+
+impl SimpleNodeError for libsignal_net_chat::grpc::backups::RedeemBackupReceiptFailure {
+    fn js_error_name(&self) -> Option<&'static str> {
+        match self {
+            Self::InvalidOrExpiredReceipt => Some("InvalidReceipt"),
+            Self::MissingBackupId => Some("MissingBackupId"),
         }
     }
 }
@@ -845,6 +802,11 @@ mod registration {
         RegistrationLock(RegistrationLock),
         RecoveryVerificationFailed,
         DeviceTransferPossibleNotSkipped,
+        RegisterAccountRequestRejected,
+        InvalidSession,
+        InvalidReceipt,
+        RecoveryPasswordRequired,
+        OneTimePasswordRequired,
     }
 
     impl SignalNodeError for BridgedErrorVariant {
@@ -883,7 +845,7 @@ mod registration {
                 }
                 Self::RegistrationLock(RegistrationLock {
                     time_remaining,
-                    svr2_credentials: Auth { username, password },
+                    svr2_credentials,
                 }) => {
                     let secs = time_remaining.as_secs();
                     return new_js_error(
@@ -897,10 +859,20 @@ mod registration {
                             props
                                 .prop(cx, "timeRemainingSeconds")
                                 .set(time_remaining_seconds)?;
-                            let svr2_username = cx.string(username);
-                            props.prop(cx, "svr2Username").set(svr2_username)?;
-                            let svr2_password = cx.string(password);
-                            props.prop(cx, "svr2Password").set(svr2_password)?;
+                            match &svr2_credentials {
+                                Some(Auth { username, password }) => {
+                                    let svr2_username = cx.string(username);
+                                    props.prop(cx, "svr2Username").set(svr2_username)?;
+                                    let svr2_password = cx.string(password);
+                                    props.prop(cx, "svr2Password").set(svr2_password)?;
+                                }
+                                None => {
+                                    let null = cx.null();
+                                    props.prop(cx, "svr2Username").set(null)?;
+                                    let null = cx.null();
+                                    props.prop(cx, "svr2Password").set(null)?;
+                                }
+                            }
                             Ok(props.upcast())
                         },
                     );
@@ -945,6 +917,26 @@ mod registration {
                 Self::DeviceTransferPossibleNotSkipped => (
                     "RegistrationDeviceTransferPossibleNotSkipped",
                     "device transfer is possible but wasn't explicitly skipped",
+                ),
+                Self::RegisterAccountRequestRejected => (
+                    "RegisterAccountRequestRejected",
+                    "the server rejected the request",
+                ),
+                Self::InvalidSession => (
+                    "RegistrationInvalidSession",
+                    "the verification session is unverified or no longer exists",
+                ),
+                Self::InvalidReceipt => (
+                    "RegistrationInvalidReceipt",
+                    "the receipt credential presentation was not accepted",
+                ),
+                Self::RecoveryPasswordRequired => (
+                    "RegistrationRecoveryPasswordRequired",
+                    "a recovery password is required",
+                ),
+                Self::OneTimePasswordRequired => (
+                    "RegistrationOneTimePasswordRequired",
+                    "a valid one-time password is required",
                 ),
             };
             new_js_error(cx, Some(name), message, operation_name, no_extra_properties)
@@ -1026,21 +1018,19 @@ mod registration {
                 RegisterAccountError::RegistrationLock(registration_lock) => {
                     Self::RegistrationLock(registration_lock)
                 }
+                RegisterAccountError::RequestRejected => Self::RegisterAccountRequestRejected,
+                RegisterAccountError::InvalidSession => Self::InvalidSession,
+                RegisterAccountError::InvalidReceipt => Self::InvalidReceipt,
+                RegisterAccountError::RecoveryPasswordRequired => Self::RecoveryPasswordRequired,
+                RegisterAccountError::OneTimePasswordRequired => Self::OneTimePasswordRequired,
             }
         }
     }
 }
 
-impl SignalNodeError for CancellationError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let message = self.to_string();
-        new_js_error(
-            cx,
-            Some("Cancelled"),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+impl SimpleNodeError for CancellationError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("Cancelled")
     }
 }
 
@@ -1069,62 +1059,37 @@ impl SignalNodeError for libsignal_message_backup::ReadError {
     }
 }
 
-impl SignalNodeError for libsignal_net_chat::api::DisconnectedError {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let message = self.to_string();
-        let name = match &self {
+impl SimpleNodeError for libsignal_net_chat::api::DisconnectedError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
             Self::ConnectedElsewhere => "ConnectedElsewhere",
             Self::ConnectionInvalidated => "ConnectionInvalidated",
             Self::Transport { .. } => IO_ERROR,
             Self::Closed => "ChatServiceInactive",
-        };
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
-impl SignalNodeError for libsignal_net_chat::api::keys::GetPreKeysFailure {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        let message = self.to_string();
-        let name = match self {
+impl SimpleNodeError for libsignal_net_chat::api::keys::GetPreKeysFailure {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
             GetPreKeysFailure::Unauthorized => "RequestUnauthorized",
             GetPreKeysFailure::NotFound => "ServiceIdNotFound",
-        };
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
-impl SignalNodeError for libsignal_net_chat::api::keytrans::Error {
-    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
+impl SimpleNodeError for libsignal_net_chat::api::keytrans::Error {
+    fn js_error_name(&self) -> Option<&'static str> {
         use libsignal_keytrans::Error as KtError;
-
-        let message = self.to_string();
-        let name = match self {
+        Some(match self {
             libsignal_net_chat::api::keytrans::Error::VerificationFailed(
                 KtError::VerificationFailed(_),
             ) => "KeyTransparencyVerificationFailed",
             libsignal_net_chat::api::keytrans::Error::VerificationFailed(_)
             | libsignal_net_chat::api::keytrans::Error::InvalidResponse(_)
             | libsignal_net_chat::api::keytrans::Error::InvalidRequest(_) => "KeyTransparencyError",
-        };
-        new_js_error(
-            cx,
-            Some(name),
-            &message,
-            operation_name,
-            no_extra_properties,
-        )
+        })
     }
 }
 
@@ -1145,14 +1110,118 @@ impl From<WithContext<ThrownException>> for std::io::Error {
     }
 }
 
-impl SignalNodeError for libsignal_net_chat::grpc::usernames::UsernameNotSet {
+impl SimpleNodeError for libsignal_net_chat::grpc::usernames::UsernameNotSet {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("UsernameNotSet")
+    }
+}
+
+impl SimpleNodeError for libsignal_net_chat::grpc::usernames::ConfirmUsernameError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::ReservationNotFound => "UsernameReservationNotFound",
+            Self::UsernameNotAvailable => "UsernameNotAvailable",
+        })
+    }
+}
+
+impl SignalNodeError for ReceiptCredentialError {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
-        new_js_error(
-            cx,
-            Some("UsernameNotSet"),
-            &self.to_string(),
-            operation_name,
-            no_extra_properties,
-        )
+        let message = self.to_string();
+        let name = match &self {
+            ReceiptCredentialError::PaymentStillProcessing => {
+                "ReceiptCredentialErrorPaymentStillProcessing"
+            }
+            ReceiptCredentialError::PaymentRequired { .. } => {
+                "ReceiptCredentialErrorPaymentRequired"
+            }
+            ReceiptCredentialError::PaymentNotFound => "ReceiptCredentialErrorPaymentNotFound",
+            ReceiptCredentialError::ReceiptAlreadyIssued => {
+                "ReceiptCredentialErrorReceiptAlreadyIssued"
+            }
+        };
+        new_js_error(cx, Some(name), &message, operation_name, |cx| {
+            if let ReceiptCredentialError::PaymentRequired { charge_failure } = self {
+                let props = cx.empty_object();
+                let charge_failure: Handle<JsValue> = charge_failure
+                    .map(|cf| {
+                        // We can't use the nice converters here because we _directly_ throw an
+                        // unconverted value.
+                        use libsignal_net_chat::grpc::login_purchase::PaymentProvider;
+                        let libsignal_net_chat::grpc::login_purchase::ChargeFailure {
+                            processor,
+                            code,
+                            message,
+                            outcome_network_status,
+                            outcome_reason,
+                            outcome_type,
+                        } = *cf;
+                        let obj = cx.empty_object();
+                        let processor = match processor {
+                            PaymentProvider::GooglePlayBilling => "googlePlayBilling",
+                            PaymentProvider::AppleAppStore => "appleAppStore",
+                            PaymentProvider::Stripe => "stripe",
+                            PaymentProvider::Braintree => "braintree",
+                        };
+                        let null: Handle<JsValue> = cx.null().upcast();
+                        for (k, v) in [
+                            ("processor", Some(processor)),
+                            ("code", Some(&code)),
+                            ("message", Some(&message)),
+                            ("outcomeNetworkStatus", outcome_network_status.as_deref()),
+                            ("outcomeReason", outcome_reason.as_deref()),
+                            ("outcomeType", outcome_type.as_deref()),
+                        ] {
+                            let v = v
+                                .map(|x| cx.string(x).upcast::<JsValue>())
+                                .unwrap_or_else(|| null);
+                            obj.prop(cx, k).set(v)?;
+                        }
+                        Ok(obj.upcast())
+                    })
+                    .transpose()?
+                    .unwrap_or_else(|| cx.null().upcast());
+                props.prop(cx, "_chargeFailure").set(charge_failure)?;
+                Ok(props.upcast())
+            } else {
+                no_extra_properties(cx)
+            }
+        })
+    }
+}
+
+impl SimpleNodeError for libsignal_net_chat::grpc::accounts::GenerateTotpKeyError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::TooManyTotpKeys => "TooManyTotpKeys",
+            Self::TooManyMfaKeys => "TooManyMfaKeys",
+        })
+    }
+}
+
+impl SimpleNodeError for libsignal_net_chat::grpc::accounts::ConfirmTotpKeyError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::OneTimePasswordNotVerified => "OneTimePasswordNotVerified",
+            Self::TooManyMfaKeys => "TooManyMfaKeys",
+        })
+    }
+}
+
+impl SimpleNodeError for libsignal_net_chat::grpc::accounts::MfaKeyNotFound {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some("MfaKeyNotFound")
+    }
+}
+
+impl<E> SignalNodeError for crate::support::RequestOrArgumentError<E>
+where
+    libsignal_net_chat::api::RequestError<E>: SignalNodeError,
+{
+    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
+        match self {
+            Self::Request(e) => e.into_throwable(cx, operation_name),
+            Self::Argument(e) => e.into_throwable(cx, operation_name),
+        }
     }
 }

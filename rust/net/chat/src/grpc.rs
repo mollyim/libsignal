@@ -6,10 +6,17 @@
 //! The `grpc` module and its submodules implement a chat server based on the gRPC messages from
 //! [libsignal-net-grpc](libsignal_net_grpc).
 
+pub mod accounts;
 pub mod backups;
+pub mod call_quality;
+pub mod credentials;
 pub mod devices;
+pub mod keys;
+pub mod login_purchase;
 mod messages;
+pub mod payments;
 mod profiles;
+pub mod stickers;
 pub mod usernames;
 
 use std::convert::Infallible;
@@ -28,8 +35,11 @@ use libsignal_net_grpc::proto::google;
 use prost::Message as _;
 use tonic::codegen::StdError;
 
-use crate::api::{ChallengeOption, DisconnectedError, RateLimitChallenge, RequestError};
+use crate::api::{
+    ChallengeOption, DisconnectedError, RateLimitChallenge, RequestError, S3UploadForm,
+};
 use crate::logging::{DebugAsStrOrBytes, Redact, RedactHex};
+use crate::stream_util::take_until_first_error;
 
 /// Marker type for use in [`crate::api`] traits.
 pub enum OverGrpc {}
@@ -341,6 +351,59 @@ where
     }
 }
 
+/// Splits `items` into chunks and makes a separate request for each of them.
+///
+/// Designed for requests that have a `repeated Item items` field: up to `chunk_size` items will be
+/// peeled off the iterator, transformed using `transform_item`, and collected in a `Vec`, which
+/// `make_request` can then embed directly into its request proto.
+///
+/// `make_request` will need to capture any parameters that don't change between requests, including
+/// the service or service provider itself. See existing callers for details.
+fn chunk_request<T, TProto, R: 'static, E: 'static, S>(
+    operation: &'static str,
+    chunk_size: usize,
+    items: impl IntoIterator<Item = T, IntoIter: ExactSizeIterator + 'static>,
+    mut transform_item: impl FnMut(T) -> TProto + 'static,
+    mut make_request: impl FnMut(Vec<TProto>) -> S + 'static,
+) -> impl Stream<Item = Result<R, E>> + 'static
+where
+    S: Stream<Item = Result<R, E>> + 'static,
+{
+    let mut items = items.into_iter();
+
+    // Keep track of progress if we're going to make more than one request.
+    let total_count = items.len();
+    let mut cumulative_count_for_logs = (total_count > chunk_size).then_some(0);
+
+    let streams = std::iter::from_fn(move || {
+        // We have to do this conversion outside of the call to `make_request` to avoid Rust
+        // thinking we're capturing the outer iterator.
+        let next_chunk: Vec<_> = items
+            .by_ref()
+            .take(chunk_size)
+            .map(&mut transform_item)
+            .collect();
+        if next_chunk.is_empty() {
+            return None;
+        }
+        if let Some(cumulative_count_for_logs) = cumulative_count_for_logs.as_mut() {
+            let prev_count = *cumulative_count_for_logs;
+            *cumulative_count_for_logs += next_chunk.len();
+            // Use Swift/Kotlin half-open range syntax "..<", it's less ambiguous across languages.
+            log::info!(
+                "{operation}: processing items {}..<{} of {}",
+                prev_count,
+                cumulative_count_for_logs,
+                total_count
+            );
+        }
+        Some(make_request(next_chunk))
+    });
+    // Explicitly end the stream after the first error so that we don't go on to make another
+    // request.
+    take_until_first_error(futures_util::stream::iter(streams).flatten())
+}
+
 impl<E> RequestError<E> {
     /// Converts a tonic `Status` to a `RequestError`, whether it's a proper server-side error, a
     /// transport error, or a library-level error.
@@ -438,11 +501,16 @@ impl<E> RequestError<E> {
             | tonic::Code::DataLoss
             | tonic::Code::Unauthenticated => {}
         }
+
+        // We treat gRPC errors as "disconnect"-level events, because we can't guarantee that the
+        // gRPC library on our end (tonic) or on the Server's end hasn't (a) reported a transport
+        // error using an opaque gRPC status, or (b) decided to end the connection over a gRPC-level
+        // error.
         // Use the Debug implementation to get the name of the code, which is easier to identify than
         // the human-readable description.
-        RequestError::Unexpected {
-            log_safe: format!("unexpected error: {:?}", status.code()),
-        }
+        RequestError::Disconnected(DisconnectedError::Transport {
+            log_safe: format!("unexpected gRPC status: {:?}", status.code()),
+        })
     }
 }
 
@@ -648,6 +716,34 @@ impl TryFrom<ChallengeRequiredProto> for RateLimitChallenge {
     }
 }
 
+impl TryFrom<libsignal_net_grpc::proto::chat::common::S3UploadForm> for S3UploadForm {
+    type Error = RequestError<std::convert::Infallible>;
+
+    fn try_from(
+        value: libsignal_net_grpc::proto::chat::common::S3UploadForm,
+    ) -> Result<Self, Self::Error> {
+        let libsignal_net_grpc::proto::chat::common::S3UploadForm {
+            key,
+            credential,
+            acl,
+            algorithm,
+            date,
+            policy,
+            signature,
+        } = value;
+        // If we want to validate any of these fields, here's where we'd do it.
+        Ok(S3UploadForm {
+            key,
+            credential,
+            acl,
+            algorithm,
+            date,
+            policy,
+            signature,
+        })
+    }
+}
+
 impl std::fmt::Display for Redact<libsignal_net_grpc::proto::chat::common::ServiceIdentifier> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0.try_as_service_id() {
@@ -668,6 +764,56 @@ pub struct GrpcTestCase<Request, RequestGrpc, ResponseGrpc, Response> {
     pub request_grpc: RequestGrpc,
     pub response_grpc: ResponseGrpc,
     pub response: Response,
+}
+
+impl<Request, RequestGrpc, ResponseGrpc, Response>
+    GrpcTestCase<Request, RequestGrpc, ResponseGrpc, Response>
+{
+    #[inline]
+    pub fn map_request<NewReq>(
+        self,
+        f: impl FnOnce(Request) -> NewReq,
+    ) -> GrpcTestCase<NewReq, RequestGrpc, ResponseGrpc, Response> {
+        let GrpcTestCase {
+            name,
+            method,
+            request,
+            request_grpc,
+            response_grpc,
+            response,
+        } = self;
+        GrpcTestCase {
+            name,
+            method,
+            request: f(request),
+            request_grpc,
+            response_grpc,
+            response,
+        }
+    }
+
+    #[inline]
+    pub fn map_response<NewResp>(
+        self,
+        f: impl FnOnce(Response) -> NewResp,
+    ) -> GrpcTestCase<Request, RequestGrpc, ResponseGrpc, NewResp> {
+        let GrpcTestCase {
+            name,
+            method,
+            request,
+            request_grpc,
+            response_grpc,
+            response,
+        } = self;
+        GrpcTestCase {
+            name,
+            method,
+            request,
+            request_grpc,
+            response_grpc,
+            response: f(response),
+        }
+    }
 }
 
 // Utilities used by exported test cases (and thus not `cfg(test)`).
@@ -1052,6 +1198,35 @@ pub(crate) mod testutil {
         }
     }
 
+    #[derive(Clone)]
+    pub(crate) struct FnValidator(
+        #[allow(clippy::type_complexity)]
+        pub  Arc<
+            dyn Fn(
+                    http::Request<tonic::body::Body>,
+                ) -> http::Response<BoxBody<bytes::Bytes, Infallible>>
+                + Send
+                + Sync,
+        >,
+    );
+
+    impl tower_service::Service<http::Request<tonic::body::Body>> for FnValidator {
+        type Response = http::Response<BoxBody<bytes::Bytes, Infallible>>;
+        type Error = hyper::Error;
+        type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+        fn poll_ready(
+            &mut self,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, req: http::Request<tonic::body::Body>) -> Self::Future {
+            std::future::ready(Ok((self.0)(req)))
+        }
+    }
+
     /// A protoscope-like helper type for decoding arbitrary protobuf messages.
     ///
     /// Always succeeds as long as the input is not malformed. Only intended for debugging.
@@ -1069,7 +1244,7 @@ pub(crate) mod testutil {
         Nested(DynMessage),
     }
 
-    trait MessageExt: Sized {
+    pub(crate) trait MessageExt: Sized {
         fn decode_single_grpc_body(
             body: impl bytes::Buf + Send + 'static,
         ) -> Result<Self, tonic::Status>;
@@ -1190,23 +1365,6 @@ pub(crate) mod testutil {
             }
         }
     }
-
-    pub(crate) fn collect_up_to_and_including_first_error<S, T, E>(
-        stream: S,
-    ) -> impl Future<Output = Vec<S::Item>>
-    where
-        S: Stream<Item = Result<T, E>>,
-    {
-        // We want to emulate the behavior of "take up to the first error", but then also check the
-        // error. Neither a simple `take_while` nor `try_collect` quite captures this, so we need a
-        // little extra state.
-        let mut stream_is_ok = true;
-        stream
-            .take_while(move |next| {
-                std::future::ready(std::mem::replace(&mut stream_is_ok, next.is_ok()))
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -1228,7 +1386,7 @@ mod test {
     use crate::grpc::test_case_util::{
         GRPC_STATUS_DETAILS_HEADER, GRPC_STATUS_HEADER, status_for_server_side_error,
     };
-    use crate::grpc::testutil::collect_up_to_and_including_first_error;
+    use crate::stream_util::collect_up_to_and_including_first_error;
 
     #[test]
     fn test_extract_server_side_error() {
@@ -1369,13 +1527,13 @@ mod test {
     fn test_retry_later(reason: &str) {
         let info = vec![
             google::rpc::RetryInfo {
-                retry_delay: Some(libsignal_net_grpc::Duration {
+                retry_delay: Some(prost_types::Duration {
                     seconds: 10,
                     nanos: 2,
                 }),
             },
             google::rpc::RetryInfo {
-                retry_delay: Some(libsignal_net_grpc::Duration {
+                retry_delay: Some(prost_types::Duration {
                     seconds: 20,
                     nanos: 5,
                 }),
@@ -1600,7 +1758,7 @@ mod test {
         let contents: Vec<_> = stream.collect().now_or_never().expect("ready");
         assert_matches!(
             &contents[..],
-            [Err(RequestError::Unexpected { log_safe })]
+            [Err(RequestError::Disconnected(DisconnectedError::Transport { log_safe }))]
             if log_safe.contains("PermissionDenied") && !log_safe.contains("user data")
         );
     }
@@ -1692,7 +1850,7 @@ mod test {
                 Ok(2),
                 Ok(3),
                 Ok(4),
-                Err(RequestError::Unexpected { log_safe }),
+                Err(RequestError::Disconnected(DisconnectedError::Transport { log_safe })),
             ]
             if log_safe.contains("PermissionDenied") && !log_safe.contains("user data")
         );
@@ -1732,5 +1890,124 @@ mod test {
                 Err(RequestError::Other(TestError::Expected))
             ]
         );
+    }
+
+    #[test]
+    fn test_chunking() {
+        testing_logger::setup();
+
+        let contents: Vec<u8> = chunk_request(
+            "test",
+            5,
+            0..24, // deliberately short on the last chunk
+            |i| i * 10,
+            |items| futures_util::stream::iter(items.into_iter().rev().map(Ok::<u8, Infallible>)),
+        )
+        .try_collect()
+        .now_or_never()
+        .expect("not actually async")
+        .expect("no failures");
+        assert_eq!(
+            &contents[..],
+            const_str::concat_bytes!(
+                [40, 30, 20, 10, 0],
+                [90, 80, 70, 60, 50],
+                [140, 130, 120, 110, 100],
+                [190, 180, 170, 160, 150],
+                [230, 220, 210, 200]
+            )
+        );
+
+        testing_logger::validate(|logs| {
+            assert_eq!(
+                logs.iter().map(|log| &log.body).collect_vec(),
+                [
+                    "test: processing items 0..<5 of 24",
+                    "test: processing items 5..<10 of 24",
+                    "test: processing items 10..<15 of 24",
+                    "test: processing items 15..<20 of 24",
+                    "test: processing items 20..<24 of 24",
+                ]
+            )
+        });
+    }
+
+    #[test]
+    fn test_single_chunk() {
+        testing_logger::setup();
+
+        let contents: Vec<u8> = chunk_request(
+            "test",
+            100,
+            0..24,
+            |i| i * 10,
+            |items| futures_util::stream::iter(items.into_iter().rev().map(Ok::<u8, Infallible>)),
+        )
+        .try_collect()
+        .now_or_never()
+        .expect("not actually async")
+        .expect("no failures");
+        assert_eq!(
+            &contents[..],
+            [
+                230, 220, 210, 200, 190, 180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 70,
+                60, 50, 40, 30, 20, 10, 0
+            ],
+        );
+
+        testing_logger::validate(|logs| {
+            assert_eq!(
+                logs.iter().map(|log| &log.body).collect_vec(),
+                &[] as &[&str]
+            )
+        });
+    }
+
+    #[test]
+    fn test_chunking_early_exit() {
+        testing_logger::setup();
+
+        let contents: Vec<_> = chunk_request(
+            "test",
+            5,
+            0..24, // deliberately short on the last chunk
+            |i| i * 10,
+            |items| {
+                assert!(
+                    items.first().copied().unwrap_or_default() < 150,
+                    "previous chunk should have failed in the middle"
+                );
+                futures_util::stream::iter(
+                    items
+                        .into_iter()
+                        .rev()
+                        .map(|i| if i != 120 { Ok(i) } else { Err(i) }),
+                )
+            },
+        )
+        .collect()
+        .now_or_never()
+        .expect("not actually async");
+
+        let (failure, successes) = contents.split_last().expect("non-empty");
+        assert_eq!(
+            successes
+                .iter()
+                .map(|x| *x.as_ref().expect("success"))
+                .collect_vec(),
+            const_str::concat_bytes!([40, 30, 20, 10, 0], [90, 80, 70, 60, 50], [140, 130])
+        );
+        assert_eq!(*failure, Err(120));
+
+        testing_logger::validate(|logs| {
+            assert_eq!(
+                logs.iter().map(|log| &log.body).collect_vec(),
+                [
+                    "test: processing items 0..<5 of 24",
+                    "test: processing items 5..<10 of 24",
+                    "test: processing items 10..<15 of 24",
+                ]
+            )
+        });
     }
 }

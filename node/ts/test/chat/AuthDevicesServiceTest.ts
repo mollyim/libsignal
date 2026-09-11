@@ -36,7 +36,7 @@ describe('AuthDevicesService', () => {
             await out;
             break;
           case 'deviceNotFound':
-            expect(out)
+            await expect(out)
               .to.eventually.be.rejectedWith(LibSignalErrorBase)
               .and.deep.include({
                 code: ErrorCode.DeviceIdNotFound,
@@ -81,6 +81,22 @@ describe('AuthDevicesService', () => {
       ) => {
         const out = await chat.getDevices();
         expect(out).to.deep.equal(resp.devices);
+      }
+    );
+  });
+
+  describe('setCapabilities', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_SetCapabilitiesTests(),
+      connectAuth<AuthDevicesService>,
+      async (
+        chat: AuthDevicesService,
+        args: NativeNice.SetCapabilitiesArgs,
+        _resp: void
+      ) => {
+        await chat.setCapabilities({
+          capabilities: new Set(args.capabilities),
+        });
       }
     );
   });

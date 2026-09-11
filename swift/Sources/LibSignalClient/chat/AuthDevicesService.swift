@@ -33,15 +33,40 @@ public struct LinkedDevice: Equatable {
         self.registrationId = registrationId
         self.createdAtCiphertext = createdAtCiphertext
     }
+}
 
-    internal static func fromInternal(_ it: LinkedDeviceInternal) -> LinkedDevice {
-        LinkedDevice(
-            id: it.id,
-            encryptedName: it.encryptedName,
-            lastSeen: it.lastSeen,
-            registrationId: it.registrationId,
-            createdAtCiphertext: it.createdAtCiphertext,
-        )
+/// A feature that a device may declare support for.
+public enum DeviceCapability: Sendable, CaseIterable {
+    case storage
+    case transfer
+    case attachmentBackfill
+    case sparsePostQuantumRatchet
+    case profilesV2
+    case usernameChangeSyncMessage
+    case optionalPhoneNumber
+
+    internal var asInternal: DeviceCapabilityInternal {
+        switch self {
+        case .storage: .storage
+        case .transfer: .transfer
+        case .attachmentBackfill: .attachmentBackfill
+        case .sparsePostQuantumRatchet: .sparsePostQuantumRatchet
+        case .profilesV2: .profilesV2
+        case .usernameChangeSyncMessage: .usernameChangeSyncMessage
+        case .optionalPhoneNumber: .optionalPhoneNumber
+        }
+    }
+
+    internal static func fromInternal(_ it: DeviceCapabilityInternal) -> DeviceCapability {
+        switch it {
+        case .storage: .storage
+        case .transfer: .transfer
+        case .attachmentBackfill: .attachmentBackfill
+        case .sparsePostQuantumRatchet: .sparsePostQuantumRatchet
+        case .profilesV2: .profilesV2
+        case .usernameChangeSyncMessage: .usernameChangeSyncMessage
+        case .optionalPhoneNumber: .optionalPhoneNumber
+        }
     }
 }
 
@@ -74,6 +99,16 @@ public protocol AuthDevicesService: Sendable {
     ///   - ``SignalError/deviceIdNotFound(_:)`` if ``deviceId`` could not be found
     ///   - the standard Signal network errors
     func setDeviceName(deviceId: DeviceId, encryptedDeviceName: Data) async throws
+    /// Declares that the current device supports the specified features.
+    ///
+    /// The provided set of capabilities replaces the device's previously
+    /// declared capabilities; a capability not listed is cleared.
+    ///
+    /// - Parameter capabilities: The ``DeviceCapability`` values supported by
+    ///   the current device.
+    /// - Throws:
+    ///   - the standard Signal network errors
+    func setCapabilities(_ capabilities: Set<DeviceCapability>) async throws
     /// Sets the APNs device token the server should use to send new message
     /// notifications to the authenticated device.
     ///
@@ -98,7 +133,7 @@ extension AuthenticatedChatConnection: AuthDevicesService {
         return try await NativeNice.AuthenticatedChatConnection_get_devices(
             asyncContext: self.tokioAsyncContext,
             chat: self,
-        ).map { LinkedDevice.fromInternal($0) }
+        )
     }
 
     public func removeDevice(deviceId: DeviceId) async throws {
@@ -115,6 +150,14 @@ extension AuthenticatedChatConnection: AuthDevicesService {
             chat: self,
             deviceId: deviceId,
             encryptedName: encryptedDeviceName
+        )
+    }
+
+    public func setCapabilities(_ capabilities: Set<DeviceCapability>) async throws {
+        return try await NativeNice.AuthenticatedChatConnection_set_capabilities(
+            asyncContext: self.tokioAsyncContext,
+            chat: self,
+            capabilities: capabilities.map(\.asInternal)
         )
     }
 

@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 attest = { workspace = true }
+libsignal-account-keys = { workspace = true }
 libsignal-bridge-macros = { workspace = true }
 libsignal-bridge-types = { workspace = true }
 libsignal-core = { workspace = true }
@@ -24,8 +25,9 @@ libsignal-keytrans = { workspace = true }
 libsignal-message-backup = { workspace = true, features = ["json"] }
 libsignal-net = { workspace = true }
 libsignal-net-chat = { workspace = true }
-libsignal-net-grpc = { workspace = true, features = ["json"] }
+libsignal-net-grpc = { workspace = true }
 libsignal-protocol = { workspace = true }
+usernames = { workspace = true }
 zkgroup = { workspace = true }
 
 base64 = { workspace = true }

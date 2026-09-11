@@ -36,6 +36,20 @@ class AuthDevicesServiceTests: AuthChatServiceTestBase<any AuthDevicesService> {
         )
     }
 
+    func testSetCapabilities() async throws {
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_SetCapabilitiesTests(),
+            invoke: { api, args in
+                try await api.setCapabilities(
+                    Set(args.capabilities.map { DeviceCapability.fromInternal($0) })
+                )
+            },
+            check: { _, actual in
+                try actual.get()
+            }
+        )
+    }
+
     func testSetPushTokenApns() async throws {
         try await testGrpcCases(
             try NativeTestingNice.TESTING_SetPushTokenApnsTests(),
@@ -70,7 +84,7 @@ class AuthDevicesServiceTests: AuthChatServiceTestBase<any AuthDevicesService> {
                 try await api.getDevices()
             },
             check: { expected, actual in
-                XCTAssertEqual(expected.devices.map { LinkedDevice.fromInternal($0) }, try actual.get())
+                XCTAssertEqual(expected.devices, try actual.get())
             }
         )
     }

@@ -8,9 +8,10 @@ import chaiAsPromised from 'chai-as-promised';
 import { Buffer } from 'node:buffer';
 
 import * as Native from '../../Native.js';
+import * as NativeNice from '../../NativeNice.js';
 import * as util from '../util.js';
 import { TokioAsyncContext, UnauthUsernamesService } from '../../net.js';
-import { connectUnauth } from './ServiceTestUtils.js';
+import { connectUnauth, defineTestGrpcCases } from './ServiceTestUtils.js';
 import { ErrorCode, LibSignalErrorBase } from '../../Errors.js';
 import { Aci } from '../../Address.js';
 import * as uuid from '../../uuid.js';
@@ -30,9 +31,13 @@ const ENCRYPTED_USERNAME_ENTROPY = Buffer.from(
 
 describe('UnauthUsernamesService', () => {
   describe('lookUpUsernameHash', () => {
+    const grpcOverrides = ['AccountsAnonymousLookupUsernameHash'];
     it('can look up hashes', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const hash = Uint8Array.of(1, 2, 3, 4);
       const responseFuture = chat.lookUpUsernameHash({ hash });
@@ -64,7 +69,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can look up unknown hashes', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const hash = Uint8Array.of(1, 2, 3, 4);
       const responseFuture = chat.lookUpUsernameHash({ hash });
@@ -87,7 +95,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can handle server errors', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const hash = Uint8Array.of(1, 2, 3, 4);
       const responseFuture = chat.lookUpUsernameHash({ hash });
@@ -113,9 +124,13 @@ describe('UnauthUsernamesService', () => {
   });
 
   describe('lookUpUsernameLink', () => {
+    const grpcOverrides = ['AccountsAnonymousLookupUsernameLink'];
     it('can look up links', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: uuid.NIL,
@@ -148,7 +163,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can look up unknown links', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: uuid.NIL,
@@ -173,7 +191,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can handle garbage ciphertexts', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: uuid.NIL,
@@ -207,7 +228,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can handle server errors', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: uuid.NIL,
@@ -236,7 +260,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can handle bad UUIDs', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, _fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, _fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: 'not',
@@ -248,7 +275,10 @@ describe('UnauthUsernamesService', () => {
 
     it('can handle bad entropy', async () => {
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, _fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio);
+      const [chat, _fakeRemote] = connectUnauth<UnauthUsernamesService>(
+        tokio,
+        grpcOverrides
+      );
 
       const responseFuture = chat.lookUpUsernameLink({
         uuid: uuid.NIL,
@@ -266,37 +296,40 @@ describe('UnauthUsernamesService', () => {
 
 describe('UnauthUsernamesServiceGrpc', () => {
   describe('lookUpUsernameLink', () => {
-    it('can look up links', async () => {
-      const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-      const [chat, fakeRemote] = connectUnauth<UnauthUsernamesService>(tokio, [
-        'AccountsAnonymousLookupUsernameLink',
-      ]);
-
-      const responseFuture = chat.lookUpUsernameLink({
-        uuid: uuid.NIL,
-        entropy: ENCRYPTED_USERNAME_ENTROPY,
-      });
-
-      const request = await fakeRemote.assertReceiveIncomingGrpcRequest();
-
-      expect(
-        request.getSingleGrpcMessage(
-          'org.signal.chat.account.LookupUsernameLinkRequest'
-        )
-      ).to.deep.eq({ usernameLinkHandle: 'AAAAAAAAAAAAAAAAAAAAAA==' });
-
-      await fakeRemote.sendGrpcReplyTo(
-        request,
-        'org.signal.chat.account.LookupUsernameLinkResponse',
-        {
-          usernameCiphertext: ENCRYPTED_USERNAME,
+    defineTestGrpcCases(
+      NativeNice.TESTING_LookUpUsernameLinkTests(),
+      connectUnauth<UnauthUsernamesService>,
+      async (
+        chat,
+        { uuid: linkUuid, entropy }: NativeNice.LookUpUsernameLinkArgs,
+        resp: NativeNice.LookUpUsernameLinkOut
+      ) => {
+        const out = chat.lookUpUsernameLink({
+          uuid: linkUuid,
+          entropy,
+        });
+        if (typeof resp === 'object') {
+          expect((await out)?.username).to.equal(resp.success);
+        } else {
+          switch (resp) {
+            case 'notFound':
+              void expect(await out).to.be.null;
+              break;
+            case 'linkDataTooShort':
+              await expect(out)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .with.property(
+                  'code',
+                  ErrorCode.InvalidUsernameLinkEncryptedData
+                );
+              break;
+            case 'missingResponse':
+              await expect(out)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .with.property('code', ErrorCode.IoError);
+          }
         }
-      );
-
-      const responseFromServer = await responseFuture;
-      assert.isNotNull(responseFromServer);
-      assert.equal(responseFromServer.username, EXPECTED_USERNAME);
-      assert.isNotEmpty(responseFromServer.hash);
-    });
+      }
+    );
   });
 });

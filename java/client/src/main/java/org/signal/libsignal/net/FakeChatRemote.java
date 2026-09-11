@@ -5,7 +5,6 @@
 
 package org.signal.libsignal.net;
 
-import java.util.Arrays;
 import java.util.UUID;
 import kotlin.Pair;
 import org.signal.libsignal.internal.CompletableFuture;
@@ -14,7 +13,7 @@ import org.signal.libsignal.internal.NativeTesting;
 import org.signal.libsignal.internal.TokioAsyncContext;
 import org.signal.libsignal.net.ChatConnection.InternalRequest;
 
-class FakeChatRemote extends NativeHandleGuard.SimpleOwner {
+public class FakeChatRemote extends NativeHandleGuard.SimpleOwner {
   public static UUID FAKE_AUTH_CONNECT_SELF_UUID = new UUID(~0, ~0);
 
   TokioAsyncContext tokioContext;
@@ -95,19 +94,6 @@ class FakeChatRemote extends NativeHandleGuard.SimpleOwner {
                         response ->
                             NativeTesting.TESTING_FakeChatRemoteEnd_SendServerGrpcResponse(
                                 asyncContextHandle, fakeRemote, response))));
-  }
-
-  static byte[] encodeSingleGrpcMessage(String name, kotlinx.serialization.json.JsonElement json) {
-    var binproto = NativeTesting.TESTING_FakeChatRemoteEnd_JsonToBinproto(name, json.toString());
-    var header = NativeTesting.TESTING_FakeChatRemoteEnd_GrpcFrameForMessageLength(binproto.length);
-    var result = Arrays.copyOf(header, header.length + binproto.length);
-    System.arraycopy(binproto, 0, result, header.length, binproto.length);
-    return result;
-  }
-
-  public CompletableFuture<Void> sendGrpcResponse(
-      long requestId, String name, kotlinx.serialization.json.JsonElement json) {
-    return sendGrpcResponse(requestId, encodeSingleGrpcMessage(name, json));
   }
 
   @Override

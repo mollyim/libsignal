@@ -5,23 +5,30 @@
 
 package org.signal.libsignal.net
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonObjectBuilder
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
-import org.junit.Assert
-import org.junit.Assert.assertNotNull
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import org.signal.libsignal.internal.CompletableFuture
+import org.signal.libsignal.internal.CopyBackupMediaOut
+import org.signal.libsignal.internal.DeleteBackupMediaOut
+import org.signal.libsignal.internal.GetCdnCredentialsOut
+import org.signal.libsignal.internal.GetMediaBackupInfoOut
+import org.signal.libsignal.internal.GetMessageBackupInfoOut
+import org.signal.libsignal.internal.GetSvrBCredentialsOut
+import org.signal.libsignal.internal.ListMediaOut
 import org.signal.libsignal.internal.NativeTesting
+import org.signal.libsignal.internal.NativeTestingNice
+import org.signal.libsignal.internal.SimpleBackupTestOut
 import org.signal.libsignal.internal.TokioAsyncContext
 import org.signal.libsignal.protocol.ecc.ECPrivateKey
 import org.signal.libsignal.zkgroup.GenericServerPublicParams
 import org.signal.libsignal.zkgroup.backups.BackupAuthCredential
 import java.net.URI
 import kotlin.io.encoding.Base64
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
@@ -56,6 +63,7 @@ val TEST_AUTH =
 
 class UnauthBackupsServiceUploadTest {
   companion object {
+    val GRPC_OVERRIDES = arrayOf("BackupsAnonymousGetUploadForm")
     val functions =
       listOf(
         "/v1/archives/upload/form" to UnauthBackupsService::getUploadForm,
@@ -71,6 +79,7 @@ class UnauthBackupsServiceUploadTest {
         UnauthenticatedChatConnection.fakeConnect(
           tokioAsyncContext,
           NoOpListener(),
+          GRPC_OVERRIDES,
           Network.Environment.STAGING,
         )
       val service = UnauthBackupsService(chat)
@@ -103,6 +112,7 @@ class UnauthBackupsServiceUploadTest {
         UnauthenticatedChatConnection.fakeConnect(
           tokioAsyncContext,
           NoOpListener(),
+          GRPC_OVERRIDES,
           Network.Environment.STAGING,
         )
       val service = UnauthBackupsService(chat)
@@ -159,6 +169,7 @@ class UnauthBackupsServiceUploadTest {
         UnauthenticatedChatConnection.fakeConnect(
           tokioAsyncContext,
           NoOpListener(),
+          GRPC_OVERRIDES,
           Network.Environment.STAGING,
         )
       val service = UnauthBackupsService(chat)
@@ -193,260 +204,362 @@ class UnauthBackupsServiceUploadTest {
 }
 
 class UnauthBackupsServiceTest {
-  fun buildBackupRequestObject(builderAction: JsonObjectBuilder.() -> Unit = {}): JsonObject =
-    buildJsonObject {
-      putJsonObject("signedPresentation") {
-        put("presentation", Base64.encode(EXPECTED_PRESENTATION))
-        put("presentationSignature", Base64.encode(EXPECTED_SIGNATURE))
-      }
-      builderAction()
-    }
-
-  // TODO: Move this to a more reusable location.
-  fun <T, E : BadRequestError> testSimpleGrpcRequest(
-    requestName: String,
-    expectedRequest: JsonObject,
-    responseName: String,
-    response: JsonObject,
-    sendRequest: UnauthenticatedChatConnection.() -> CompletableFuture<RequestResult<T, E>>,
-  ): RequestResult<T, E> {
-    NativeTesting.TESTING_EnableDeterministicRngForTesting()
-    val tokioAsyncContext = TokioAsyncContext()
-    val (chat, fakeRemote) =
-      UnauthenticatedChatConnection.fakeConnect(
-        tokioAsyncContext,
-        NoOpListener(),
-        Network.Environment.STAGING,
-      )
-
-    val responseFuture = chat.sendRequest()
-
-    // Get the incoming request from the fake remote
-    val (request, requestId) = fakeRemote.getNextIncomingGrpcRequest().get()
-    Assert.assertEquals(
-      request.getSingleGrpcMessage(requestName),
-      expectedRequest,
-    )
-
-    // Send successful response
-    fakeRemote.sendGrpcResponse(
-      requestId,
-      responseName,
-      response,
-    )
-
-    return responseFuture.get()
-  }
-
-  fun <T, E : BadRequestError> testSimpleBackupRequestSuccess(
-    requestName: String,
-    expectedRequest: JsonObject,
-    responseName: String,
-    response: JsonObject,
-    sendRequest: UnauthBackupsService.() -> CompletableFuture<RequestResult<T, E>>,
-  ): T {
-    val result =
-      testSimpleGrpcRequest(requestName, expectedRequest, responseName, response) {
-        UnauthBackupsService(this).sendRequest()
-      }
-    val successResult = assertIs<RequestResult.Success<T>>(result)
-    assertNotNull(successResult.result)
-    return successResult.result
-  }
-
-  fun <T, E : BadRequestError> testSimpleBackupRequestUnauthorized(
-    requestName: String,
-    expectedRequest: JsonObject,
-    responseName: String,
-    sendRequest: UnauthBackupsService.() -> CompletableFuture<RequestResult<T, E>>,
-  ) {
-    val result =
-      testSimpleGrpcRequest(
-        requestName,
-        expectedRequest,
-        responseName,
-        buildJsonObject {
-          // There's no rule that says all the failed authentication responses HAVE to have the same oneof field name.
-          // But in practice they do.
-          putJsonObject("failedAuthentication") {
-            put("description", "bad auth")
+  @Test
+  fun testSetPublicKey() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_BackupSetPublicKeyTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.setPublicKey(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            SimpleBackupTestOut.Success ->
+              assertIs<RequestResult.Success<Unit>>(actual)
+            SimpleBackupTestOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            SimpleBackupTestOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
           }
         },
-      ) {
-        UnauthBackupsService(this).sendRequest()
-      }
-    val nonSuccess = assertIs<RequestResult.NonSuccess<E>>(result)
-    assertIs<RequestUnauthorizedException>(nonSuccess.error)
-  }
+      )
+    }
 
   @Test
-  fun testSetPublicKey() {
-    testSimpleBackupRequestSuccess(
-      "org.signal.chat.backup.SetPublicKeyRequest",
-      buildBackupRequestObject {
-        put("publicKey", Base64.encode(TEST_SIGNING_KEY_PUB))
-      },
-      "org.signal.chat.backup.SetPublicKeyResponse",
-      buildJsonObject {
-        putJsonObject("success") {}
-      },
-    ) {
-      @Suppress("DEPRECATION")
-      setPublicKey(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-
-    testSimpleBackupRequestUnauthorized(
-      "org.signal.chat.backup.SetPublicKeyRequest",
-      buildBackupRequestObject {
-        put("publicKey", Base64.encode(TEST_SIGNING_KEY_PUB))
-      },
-      "org.signal.chat.backup.SetPublicKeyResponse",
-    ) {
-      @Suppress("DEPRECATION")
-      setPublicKey(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-  }
-
-  @Test
-  fun testRefresh() {
-    testSimpleBackupRequestSuccess(
-      "org.signal.chat.backup.RefreshRequest",
-      buildBackupRequestObject(),
-      "org.signal.chat.backup.RefreshResponse",
-      buildJsonObject {
-        putJsonObject("success") {}
-      },
-    ) {
-      @Suppress("DEPRECATION")
-      refresh(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-
-    testSimpleBackupRequestUnauthorized(
-      "org.signal.chat.backup.RefreshRequest",
-      buildBackupRequestObject(),
-      "org.signal.chat.backup.RefreshResponse",
-    ) {
-      @Suppress("DEPRECATION")
-      refresh(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-  }
-
-  @Test
-  fun testDeleteAll() {
-    testSimpleBackupRequestSuccess(
-      "org.signal.chat.backup.DeleteAllRequest",
-      buildBackupRequestObject(),
-      "org.signal.chat.backup.DeleteAllResponse",
-      buildJsonObject {
-        putJsonObject("success") {}
-      },
-    ) {
-      @Suppress("DEPRECATION")
-      deleteAll(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-    testSimpleBackupRequestUnauthorized(
-      "org.signal.chat.backup.DeleteAllRequest",
-      buildBackupRequestObject(),
-      "org.signal.chat.backup.DeleteAllResponse",
-    ) {
-      @Suppress("DEPRECATION")
-      deleteAll(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
-      )
-    }
-  }
-
-  @Test
-  fun testGetCdnCredentials() {
-    val credentials =
-      testSimpleBackupRequestSuccess(
-        "org.signal.chat.backup.GetCdnCredentialsRequest",
-        buildBackupRequestObject {
-          put("cdn", 40)
+  fun testRefresh() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_BackupRefreshTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
         },
-        "org.signal.chat.backup.GetCdnCredentialsResponse",
-        buildJsonObject {
-          putJsonObject("cdnCredentials") {
-            putJsonObject("headers") {
-              put("b", "bbb")
-              put("a", "aaa")
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.refresh(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            SimpleBackupTestOut.Success ->
+              assertIs<RequestResult.Success<Unit>>(actual)
+            SimpleBackupTestOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            SimpleBackupTestOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testDeleteAll() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_BackupDeleteAllTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.deleteAll(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            SimpleBackupTestOut.Success ->
+              assertIs<RequestResult.Success<Unit>>(actual)
+            SimpleBackupTestOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            SimpleBackupTestOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testGetCdnCredentials() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_GetBackupCdnCredentialsTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, cdn ->
+          chat.getCdnCredentials(
+            TEST_AUTH,
+            cdn,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is GetCdnCredentialsOut.Success ->
+              assertEquals(expected._0, assertIs<RequestResult.Success<BackupCdnCredentials>>(actual).result)
+            GetCdnCredentialsOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            GetCdnCredentialsOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testGetMessageBackupInfo() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_GetMessageBackupInfoTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.getMessageBackupInfo(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is GetMessageBackupInfoOut.Success ->
+              assertEquals(
+                expected._0,
+                assertIs<RequestResult.Success<MessageBackupInfo>>(actual).result,
+              )
+            GetMessageBackupInfoOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            GetMessageBackupInfoOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testGetMediaBackupInfo() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_GetMediaBackupInfoTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.getMediaBackupInfo(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is GetMediaBackupInfoOut.Success ->
+              assertEquals(
+                expected._0,
+                assertIs<RequestResult.Success<MediaBackupInfo>>(actual).result,
+              )
+            GetMediaBackupInfoOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            GetMediaBackupInfoOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testGetSvrBCredentials() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_GetBackupSvrBCredentialsTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, _ ->
+          chat.getSvrBCredentials(
+            TEST_AUTH,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is GetSvrBCredentialsOut.Success ->
+              assertEquals(
+                Pair(expected.username, expected.password),
+                assertIs<RequestResult.Success<Pair<String, String>>>(actual).result,
+              )
+            GetSvrBCredentialsOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            GetSvrBCredentialsOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
+
+  @Test
+  fun testCopyMedia() =
+    runTest {
+      GrpcTestCase.runSuspendingTests(
+        NativeTestingNice.TESTING_CopyBackupMediaTests(),
+        { asyncRuntime, listener ->
+          UnauthenticatedChatConnection.fakeConnect(
+            asyncRuntime,
+            listener,
+            Network.Environment.STAGING,
+          )
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, items ->
+          val inputs =
+            items.map {
+              CopyBackupMediaItem(
+                sourceAttachmentCdn = it.sourceAttachmentCdn,
+                sourceKey = it.sourceKey,
+                objectLength = it.objectLength,
+                mediaId = it.mediaId,
+                encryptionKey = it.encryptionKey,
+              )
+            }
+          chat
+            .copyMedia(
+              TEST_AUTH,
+              inputs,
+              DeterministicRandomSeedUseOnlyForTesting(0),
+            ).map { it as Any }
+            .catch { emit(it.toRequestResult<RequestUnauthorizedException>() as Any) }
+            .toList()
+        },
+        check = { expected, actual ->
+          val actualIter = actual.iterator()
+          for (entry in expected) {
+            val next = actualIter.next()
+            when (entry) {
+              is CopyBackupMediaOut.Item -> {
+                assertIs<CopyBackupMediaOutcome>(next)
+                assertEquals(CopyBackupMediaOutcome.fromFfi(entry._0), next)
+              }
+
+              is CopyBackupMediaOut.CredentialRejected -> {
+                val nonSuccess = assertIs<RequestResult.NonSuccess<*>>(next)
+                assertIs<RequestUnauthorizedException>(nonSuccess.error)
+              }
+
+              is CopyBackupMediaOut.InvalidDataInStream,
+              is CopyBackupMediaOut.CredentialRejectedWithoutAppropriateServerInfo,
+              -> {
+                val error = assertIs<RequestResult.ApplicationError>(next)
+                assertIs<UnexpectedResponseException>(error.cause)
+              }
             }
           }
+          assertFalse(actualIter.hasNext())
         },
-      ) {
-        @Suppress("DEPRECATION")
-        getCdnCredentials(
-          TEST_AUTH,
-          40,
-          DeterministicRandomSeedUseOnlyForTesting(0),
-        )
-      }
-    Assert.assertEquals(credentials, BackupCdnCredentials(mapOf("a" to "aaa", "b" to "bbb")))
-
-    testSimpleBackupRequestUnauthorized(
-      "org.signal.chat.backup.GetCdnCredentialsRequest",
-      buildBackupRequestObject {
-        put("cdn", 40)
-      },
-      "org.signal.chat.backup.GetCdnCredentialsResponse",
-    ) {
-      @Suppress("DEPRECATION")
-      getCdnCredentials(
-        TEST_AUTH,
-        40,
-        DeterministicRandomSeedUseOnlyForTesting(0),
       )
     }
-  }
 
   @Test
-  fun testGetSvrBCredentials() {
-    val credentials =
-      testSimpleBackupRequestSuccess(
-        "org.signal.chat.backup.GetSvrBCredentialsRequest",
-        buildBackupRequestObject(),
-        "org.signal.chat.backup.GetSvrBCredentialsResponse",
-        buildJsonObject {
-          putJsonObject("svrbCredentials") {
-            put("username", "user")
-            put("password", "pass")
-          }
+  fun testDeleteMedia() =
+    runTest {
+      GrpcTestCase.runSuspendingTests(
+        NativeTestingNice.TESTING_DeleteBackupMediaTests(),
+        { asyncRuntime, listener ->
+          UnauthenticatedChatConnection.fakeConnect(
+            asyncRuntime,
+            listener,
+            Network.Environment.STAGING,
+          )
         },
-      ) {
-        @Suppress("DEPRECATION")
-        getSvrBCredentials(
-          TEST_AUTH,
-          DeterministicRandomSeedUseOnlyForTesting(0),
-        )
-      }
-    Assert.assertEquals(credentials, "user" to "pass")
+        ::UnauthBackupsService,
+        invoke = { chat, items ->
+          val inputs =
+            items.map {
+              DeleteBackupMediaItem(
+                mediaId = it.mediaId,
+                cdn = it.cdn,
+              )
+            }
+          chat
+            .deleteMedia(
+              TEST_AUTH,
+              inputs,
+              DeterministicRandomSeedUseOnlyForTesting(0),
+            ).map { it as Any }
+            .catch { emit(it.toRequestResult<RequestUnauthorizedException>() as Any) }
+            .toList()
+        },
+        check = { expected, actual ->
+          val actualIter = actual.iterator()
+          for (entry in expected) {
+            val next = actualIter.next()
+            when (entry) {
+              is DeleteBackupMediaOut.Item -> {
+                assertIs<DeleteBackupMediaItem>(next)
+                assertContentEquals(entry._0.mediaId, next.mediaId)
+                assertEquals(entry._0.cdn, next.cdn)
+              }
 
-    testSimpleBackupRequestUnauthorized(
-      "org.signal.chat.backup.GetSvrBCredentialsRequest",
-      buildBackupRequestObject(),
-      "org.signal.chat.backup.GetSvrBCredentialsResponse",
-    ) {
-      @Suppress("DEPRECATION")
-      getSvrBCredentials(
-        TEST_AUTH,
-        DeterministicRandomSeedUseOnlyForTesting(0),
+              is DeleteBackupMediaOut.CredentialRejected -> {
+                val nonSuccess = assertIs<RequestResult.NonSuccess<*>>(next)
+                assertIs<RequestUnauthorizedException>(nonSuccess.error)
+              }
+
+              is DeleteBackupMediaOut.InvalidDataInStream,
+              is DeleteBackupMediaOut.CredentialRejectedWithoutAppropriateServerInfo,
+              -> {
+                val error = assertIs<RequestResult.ApplicationError>(next)
+                assertIs<UnexpectedResponseException>(error.cause)
+              }
+            }
+          }
+          assertFalse(actualIter.hasNext())
+        },
       )
     }
-  }
+
+  @Test
+  fun testListMedia() =
+    runTest {
+      GrpcTestCase.runTests(
+        NativeTestingNice.TESTING_BackupListMediaTests(),
+        { tokio, listener ->
+          UnauthenticatedChatConnection.fakeConnect(tokio, listener, Network.Environment.STAGING)
+        },
+        ::UnauthBackupsService,
+        invoke = { chat, args ->
+          chat.listMedia(
+            TEST_AUTH,
+            args.cursor,
+            if (args.limit < 0) null else args.limit,
+            DeterministicRandomSeedUseOnlyForTesting(0),
+          )
+        },
+        check = { expected, actual ->
+          when (expected) {
+            is ListMediaOut.Page ->
+              assertEquals(
+                expected._0,
+                assertIs<RequestResult.Success<ListBackupMediaResponse>>(actual).result,
+              )
+            ListMediaOut.CredentialRejected ->
+              actual.assertNonSuccess<_, _, RequestUnauthorizedException>()
+            ListMediaOut.MalformedMediaId, ListMediaOut.MissingResponse ->
+              assertIs<UnexpectedResponseException>(assertIs<RequestResult.ApplicationError>(actual).cause)
+          }
+        },
+      )
+    }
 }

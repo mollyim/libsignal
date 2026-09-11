@@ -407,8 +407,6 @@ impl<'a> AsyncArgTypeInfo<'a> for &'a [SessionRecord] {
 /// #     Ok(())
 /// # }
 /// ```
-///
-/// Implementers should also see the `jni_result_type` macro in `convert.rs`.
 pub trait ResultTypeInfo<'a>: Sized {
     /// The JavaScript form of the result (e.g. `JsNumber`).
     type ResultType: neon::types::Value;
@@ -805,7 +803,7 @@ impl SimpleArgTypeInfo for libsignal_net_chat::api::messages::MultiRecipientSend
 }
 
 macro_rules! zkgroup_serialize_type {
-    ($ty:ty, $cls:expr) => {
+    ($ty:ty, $deser:expr, $cls:expr) => {
         impl SimpleArgTypeInfo for $ty {
             type ArgType = JsUint8Array;
 
@@ -815,7 +813,7 @@ macro_rules! zkgroup_serialize_type {
             ) -> NeonResult<Self> {
                 let elements = foreign.downcast_or_throw::<JsUint8Array, _>(cx)?;
                 let bytes = elements.as_slice(cx);
-                zkgroup::deserialize(bytes).or_else(|_: ZkGroupDeserializationFailure| {
+                ($deser)(bytes).or_else(|_: ZkGroupDeserializationFailure| {
                     cx.throw_type_error(concat!("bad ", stringify!($ty)))
                 })
             }
@@ -832,6 +830,30 @@ macro_rules! zkgroup_serialize_type {
                 }
             }
         }
+
+        impl<'a> ResultTypeInfo<'a> for $ty {
+            type ResultType = <Vec<u8> as ResultTypeInfo<'a>>::ResultType;
+            fn convert_into(self, cx: &mut Cx<'a>) -> JsResult<'a, Self::ResultType> {
+                zkgroup::serialize(&self).convert_into(cx)
+            }
+            #[cfg(feature = "metadata")]
+            fn register_ts_ffi_type(ctx: &mut TsMetadataContext) -> String {
+                <Vec<u8> as ResultTypeInfo<'a>>::register_ts_ffi_type(ctx)
+            }
+        }
+        #[cfg(feature = "metadata")]
+        impl NiceResultConverter for $ty {
+            fn register_ts_result_converter(_ctx: &mut TsMetadataContext) -> TsReturnConverter {
+                TsReturnConverter {
+                    nice_type: format!("zkgroup.{}", $cls),
+                    ffi_type: "Uint8Array<ArrayBuffer>".to_string(),
+                    converter_function: format!("((x) => new zkgroup.{}(x))", $cls),
+                }
+            }
+        }
+    };
+    ($ty:ty, $cls:expr) => {
+        zkgroup_serialize_type!($ty, zkgroup::deserialize, $cls);
     };
 }
 zkgroup_serialize_type!(GroupSendFullToken, "GroupSendFullToken");
@@ -841,7 +863,17 @@ zkgroup_serialize_type!(
 );
 zkgroup_serialize_type!(
     zkgroup::generic_server_params::GenericServerPublicParams,
+    TryFrom::try_from,
     "GenericServerPublicParams"
+);
+zkgroup_serialize_type!(zkgroup::receipts::ReceiptCredential, "ReceiptCredential");
+zkgroup_serialize_type!(
+    zkgroup::receipts::ReceiptCredentialRequestContext,
+    "ReceiptCredentialRequestContext"
+);
+zkgroup_serialize_type!(
+    zkgroup::receipts::ReceiptCredentialPresentation,
+    "ReceiptCredentialPresentation"
 );
 
 // Used for callback results.
@@ -1001,6 +1033,18 @@ where
     #[cfg(feature = "metadata")]
     fn register_ts_ffi_type(ctx: &mut TsMetadataContext) -> String {
         format!("({} | null)", T::register_ts_ffi_type(ctx))
+    }
+}
+
+#[cfg(feature = "metadata")]
+impl<T: NiceArgConverter> NiceArgConverter for Option<T> {
+    fn register_ts_arg_converter(ctx: &mut TsMetadataContext) -> TsArgConverter {
+        let t = T::register_ts_arg_converter(ctx);
+        TsArgConverter {
+            nice_type: format!("({} | null)", t.nice_type),
+            ffi_type: format!("({} | null)", t.ffi_type),
+            converter_function: format!("liftNull({})", t.converter_function),
+        }
     }
 }
 
@@ -1598,6 +1642,18 @@ impl<'a, T: ResultTypeInfo<'a>> ResultTypeInfo<'a> for Option<T> {
     }
 }
 
+#[cfg(feature = "metadata")]
+impl<T: NiceResultConverter> NiceResultConverter for Option<T> {
+    fn register_ts_result_converter(ctx: &mut TsMetadataContext) -> TsReturnConverter {
+        let t = T::register_ts_result_converter(ctx);
+        TsReturnConverter {
+            nice_type: format!("({} | null)", t.nice_type),
+            ffi_type: format!("({} | null)", t.ffi_type),
+            converter_function: format!("liftNull({})", t.converter_function),
+        }
+    }
+}
+
 impl<'a> ResultTypeInfo<'a> for Vec<u8> {
     type ResultType = JsUint8Array;
     fn convert_into(self, cx: &mut Cx<'a>) -> NeonResult<Handle<'a, Self::ResultType>> {
@@ -1881,8 +1937,13 @@ impl<A: NiceResultConverter, B: NiceResultConverter> NiceResultConverter for (A,
             nice_type: format!("[{}, {}]", a.nice_type, b.nice_type),
             ffi_type: format!("[{}, {}]", a.ffi_type, b.ffi_type),
             converter_function: format!(
-                "([a, b]) => [({})(a), ({})(b)]",
-                a.converter_function, b.converter_function
+                "([a, b]: [{}, {}]): [{}, {}] => [({})(a), ({})(b)]",
+                a.ffi_type,
+                b.ffi_type,
+                a.nice_type,
+                b.nice_type,
+                a.converter_function,
+                b.converter_function
             ),
         }
     }
@@ -2209,7 +2270,6 @@ impl<'a, T: SignalNodeError> ResultTypeInfo<'a> for crate::support::BridgedError
     register_ts_ffi_type!("Error");
 }
 nice_identity_result_converter!(<T: SignalNodeError> crate::support::BridgedError<T>);
-nice_identity_result_converter!(<T: SignalNodeError> Option<crate::support::BridgedError<T>>);
 
 impl<'a, T: SignalNodeError> ResultTypeInfo<'a> for BulkPolledStreamTerminationReason<T> {
     type ResultType = JsValue;
@@ -2229,7 +2289,6 @@ impl<'a, T: SignalNodeError> ResultTypeInfo<'a> for BulkPolledStreamTerminationR
     register_ts_ffi_type!("(\"finished\"|Error)");
 }
 nice_identity_result_converter!(<T: SignalNodeError> BulkPolledStreamTerminationReason<T>);
-nice_identity_result_converter!(<T: SignalNodeError> Option<BulkPolledStreamTerminationReason<T>>);
 
 macro_rules! full_range_integer {
     ($typ:ty) => {
@@ -2309,6 +2368,35 @@ where
     }
 }
 
+impl SimpleArgTypeInfo for f32 {
+    type ArgType = JsNumber;
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
+        let foreign = foreign.value(cx);
+        Ok(foreign as f32)
+    }
+
+    #[cfg(feature = "metadata")]
+    fn register_ts_ffi_type(_ctx: &mut TsMetadataContext) -> String {
+        "number".to_string()
+    }
+}
+nice_identity_arg_converter!(f32);
+impl<'a> ResultTypeInfo<'a> for f32 {
+    type ResultType = JsNumber;
+
+    fn convert_into(self, cx: &mut Cx<'a>) -> JsResult<'a, Self::ResultType> {
+        Ok(cx.number(self))
+    }
+
+    #[cfg(feature = "metadata")]
+    fn register_ts_ffi_type(_ctx: &mut TsMetadataContext) -> String {
+        "number".to_string()
+    }
+}
+nice_identity_result_converter!(f32);
+
 impl<T> SimpleArgTypeInfo for Serialized<T>
 where
     T: FixedLengthBincodeSerializable
@@ -2341,6 +2429,22 @@ where
     }
 }
 
+#[cfg(feature = "metadata")]
+impl<T> NiceArgConverter for Serialized<T>
+where
+    T: FixedLengthBincodeSerializable,
+{
+    fn register_ts_arg_converter(_ctx: &mut TsMetadataContext) -> TsArgConverter {
+        TsArgConverter {
+            // If we ever want to use FixedLengthBincodeSerializable for non-zkgroup types,
+            // we can add a module name as a trait requirement.
+            nice_type: format!("zkgroup.{}", T::name()),
+            ffi_type: "Uint8Array<ArrayBuffer>".to_owned(),
+            converter_function: "ByteArray.prototype.getContents.call".to_owned(),
+        }
+    }
+}
+
 impl<'a, T> crate::node::ResultTypeInfo<'a> for Serialized<T>
 where
     T: FixedLengthBincodeSerializable + serde::Serialize,
@@ -2356,6 +2460,44 @@ where
         let name = T::name();
         ctx.opaque_types.insert(name.clone());
         format!("Serialized<{name}>")
+    }
+}
+
+#[cfg(feature = "metadata")]
+impl NiceResultConverter for crate::net::chat::CopyBackupMediaStream {
+    fn register_ts_result_converter(_ctx: &mut TsMetadataContext) -> TsReturnConverter {
+        TsReturnConverter {
+            nice_type: concat!(
+                "(",
+                "(asyncContext: TokioAsyncContext)",
+                // Note that we delay converting this to a nice type for TS module dependency cycle
+                // reasons.
+                "=> ReadableStream<Native.ReturnFfiBridgeCopyBackupMediaOutcome>",
+                ")"
+            )
+            .to_owned(),
+            ffi_type: "Native.CopyBackupMediaStream".to_owned(),
+            converter_function: "copyBackupMediaStreamConverter".to_owned(),
+        }
+    }
+}
+
+#[cfg(feature = "metadata")]
+impl NiceResultConverter for crate::net::chat::DeleteBackupMediaStream {
+    fn register_ts_result_converter(_ctx: &mut TsMetadataContext) -> TsReturnConverter {
+        TsReturnConverter {
+            nice_type: concat!(
+                "(",
+                "(asyncContext: TokioAsyncContext)",
+                // Note that we delay converting this to a nice type for TS module dependency cycle
+                // reasons.
+                "=> ReadableStream<Native.ReturnFfiBridgeDeleteBackupMediaItem>",
+                ")"
+            )
+            .to_owned(),
+            ffi_type: "Native.DeleteBackupMediaStream".to_owned(),
+            converter_function: "deleteBackupMediaStreamConverter".to_owned(),
+        }
     }
 }
 

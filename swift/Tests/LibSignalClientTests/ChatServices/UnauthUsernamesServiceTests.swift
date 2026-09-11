@@ -13,6 +13,10 @@ import XCTest
 class UnauthUsernamesServiceTests: UnauthChatServiceTestBase<any UnauthUsernamesService> {
     override class var selector: SelectorCheck { .usernames }
 
+    override var grpcOverrides: [String] {
+        ["AccountsAnonymousLookupUsernameHash", "AccountsAnonymousLookupUsernameLink"]
+    }
+
     static let EXPECTED_USERNAME = "moxie.01"
     static let ENCRYPTED_USERNAME =
         "kj5ah-VbEgjpfJsNt-Wto2H626DRmJSVpYPy0yPOXA8kiSFkBCD8ysFlJ-Z3MhiAnt_R3Nm7ZY0W5fiRDLVbhaE2z-KO2xdf5NcVbkewCzhvveecS3hHskDp1aSfbvwTZNNGPmAuKWvJ1MPdHzsF0w"
@@ -196,32 +200,31 @@ class UnauthUsernamesServiceTests: UnauthChatServiceTestBase<any UnauthUsernames
 class UnauthUsernamesServiceGrpcTests: UnauthChatServiceTestBase<any UnauthUsernamesService> {
     override class var selector: SelectorCheck { .usernames }
 
-    override var grpcOverrides: [String] {
-        ["AccountsAnonymousLookupUsernameLink"]
-    }
-
     func testUsernameLinkLookup() async throws {
-        let api = self.api
-        async let responseFuture = api.lookUpUsernameLink(
-            UUID(uuid: nilUuid),
-            entropy: UnauthUsernamesServiceTests.ENCRYPTED_USERNAME_ENTROPY
+        try await testGrpcCases(
+            try NativeTestingNice.TESTING_LookUpUsernameLinkTests(),
+            invoke: { api, args in
+                try await api.lookUpUsernameLink(args.uuid, entropy: args.entropy)
+            },
+            check: { (expected, actual: Result<Username?, _>) in
+                switch expected {
+                case .success(let username):
+                    XCTAssertEqual(try actual.get()?.value, username)
+                case .notFound:
+                    XCTAssertNil(try actual.get())
+                case .linkDataTooShort:
+                    if case .failure(SignalError.usernameLinkInvalid(_)) = actual {
+                    } else {
+                        XCTFail("expected .usernameLinkInvalid, got \(actual)")
+                    }
+                case .missingResponse:
+                    if case .failure(SignalError.networkProtocolError(_)) = actual {
+                    } else {
+                        XCTFail("expected .networkProtocolError, got \(actual)")
+                    }
+                }
+            }
         )
-
-        let (request, id) = try await fakeRemote.getNextIncomingGrpcRequest()
-        XCTAssertEqual(
-            request.getSingleGrpcMessage("org.signal.chat.account.LookupUsernameLinkRequest"),
-            ["usernameLinkHandle": "AAAAAAAAAAAAAAAAAAAAAA=="]
-        )
-
-        try await fakeRemote.sendGrpcResponse(
-            requestId: id,
-            name: "org.signal.chat.account.LookupUsernameLinkResponse",
-            json: ["usernameCiphertext": UnauthUsernamesServiceTests.ENCRYPTED_USERNAME]
-        )
-
-        let responseFromServer = try await responseFuture
-        XCTAssertNotNil(responseFromServer)
-        XCTAssertEqual(responseFromServer!.value, UnauthUsernamesServiceTests.EXPECTED_USERNAME)
     }
 }
 

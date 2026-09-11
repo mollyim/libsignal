@@ -64,6 +64,14 @@ pub enum StructOrEnum<FieldType> {
     Enum(Enum<FieldType>),
 }
 
+#[derive(From, Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DerivedType<FieldType> {
+    /// If present, don't actually emit a nice type. Use the provided type instead.
+    pub nice_type: Option<String>,
+    #[serde(flatten)]
+    pub body: StructOrEnum<FieldType>,
+}
+
 #[cfg(feature = "node")]
 pub mod node {
     use std::collections::{BTreeMap, BTreeSet};
@@ -104,9 +112,9 @@ pub mod node {
         pub bridge_traits: BTreeMap<String, Vec<BridgeTraitFunction>>,
         pub nice_functions: BTreeMap<String, NiceFunction>,
 
-        pub derived_types: BTreeMap<String, StructOrEnum<NiceType>>,
-        pub derived_return_converters: BTreeMap<String, StructOrEnum<TsReturnConverter>>,
-        pub derived_arg_converters: BTreeMap<String, StructOrEnum<TsArgConverter>>,
+        pub derived_types: BTreeMap<String, DerivedType<NiceType>>,
+        pub derived_return_converters: BTreeMap<String, DerivedType<TsReturnConverter>>,
+        pub derived_arg_converters: BTreeMap<String, DerivedType<TsArgConverter>>,
     }
 
     #[derive(Debug, Clone, Serialize)]
@@ -266,13 +274,23 @@ pub mod jni {
         pub return_type: KtReturnConverter,
     }
 
+    #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+    pub struct JniFunction {
+        pub is_throwing: bool,
+        /// `(argument name, kotlin type)`
+        pub args: Vec<(String, String)>,
+        /// Kotlin result type
+        pub result: String,
+    }
+
     #[derive(Debug, Clone, Serialize, Default)]
     pub struct KtMetadataContext {
+        pub jni_functions: BTreeMap<String, JniFunction>,
         pub nice_functions: BTreeMap<String, NiceFunction>,
 
-        pub derived_types: BTreeMap<String, StructOrEnum<NiceType>>,
-        pub derived_return_converters: BTreeMap<String, StructOrEnum<KtReturnConverter>>,
-        pub derived_arg_converters: BTreeMap<String, StructOrEnum<KtArgConverter>>,
+        pub derived_types: BTreeMap<String, DerivedType<NiceType>>,
+        pub derived_return_converters: BTreeMap<String, DerivedType<KtReturnConverter>>,
+        pub derived_arg_converters: BTreeMap<String, DerivedType<KtArgConverter>>,
     }
 
     /// These functions should mutate the attached [KtMetadataContext] to register their item.

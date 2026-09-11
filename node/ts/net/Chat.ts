@@ -31,6 +31,39 @@ export type UploadForm = {
   signedUploadUrl: URL;
 };
 
+/**
+ * The information needed for an upload to CDN0.
+ *
+ * Only the `key` is relevant to an application, as the CDN-relative path of the uploaded file.
+ * Everything else should be passed through directly to AWS.
+ */
+export type S3UploadForm = {
+  key: string;
+  credential: string;
+  acl: string;
+  algorithm: string;
+  date: string;
+  policy: string;
+  signature: string;
+};
+
+// "Methods" for S3UploadForm even though it's not a true class.
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace S3UploadForm {
+  /** Retrieves the properties in a known-working order for S3's POST-based upload. */
+  export function asHeaders(form: S3UploadForm): [string, string][] {
+    return [
+      ['acl', form.acl],
+      ['key', form.key],
+      ['policy', form.policy],
+      ['x-amz-algorithm', form.algorithm],
+      ['x-amz-credential', form.credential],
+      ['x-amz-date', form.date],
+      ['x-amz-signature', form.signature],
+    ];
+  }
+}
+
 type ConnectionManager = Native.Wrapper<Native.ConnectionManager>;
 
 export class ChatServerMessageAck {
@@ -81,6 +114,13 @@ export interface ChatServiceListener extends ConnectionEventsListener {
    * In practice this happens as part of the connecting process.
    */
   onReceivedAlerts?: (alerts: string[]) => void;
+
+  /**
+   * Called with the server's current clock time.
+   *
+   * Like {@link #onIncomingMessage}, this timestamp is in milliseconds since the Unix epoch.
+   */
+  onServerTimestamp?: (timestamp: number) => void;
 }
 
 export interface ProvisioningConnectionListener
@@ -541,6 +581,9 @@ class WeakListenerWrapper implements Native.ChatListener {
   receivedAlerts(alerts: string[]): void {
     this.listener.deref()?.receivedAlerts(alerts);
   }
+  receivedServerTimestamp(timestamp: number): void {
+    this.listener.deref()?.receivedServerTimestamp(timestamp);
+  }
 }
 
 /** Like {@link WeakListenerWrapper}, but for {@link ProvisioningConnection}. */
@@ -586,6 +629,9 @@ function makeNativeChatListener(
       receivedAlerts(alerts: string[]): void {
         listener.onReceivedAlerts?.(alerts);
       },
+      receivedServerTimestamp(timestamp: number): void {
+        listener.onServerTimestamp?.(timestamp);
+      },
       connectionInterrupted(cause: Error | null): void {
         listener.onConnectionInterrupted(cause as LibSignalError | null);
       },
@@ -602,6 +648,9 @@ function makeNativeChatListener(
     },
     receivedQueueEmpty(): void {
       throw new Error('Event not supported on unauthenticated connection');
+    },
+    receivedServerTimestamp(): void {
+      // Ignore this for the unauthenticated connection.
     },
     receivedAlerts(alerts: string[]): void {
       if (alerts.length != 0) {

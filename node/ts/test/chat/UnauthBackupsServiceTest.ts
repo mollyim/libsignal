@@ -7,9 +7,10 @@ import { config, expect, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
 import * as Native from '../../Native.js';
+import * as NativeNice from '../../NativeNice.js';
 import * as util from '../util.js';
 import { TokioAsyncContext, UnauthBackupsService } from '../../net.js';
-import { connectUnauth, testSimpleGrpcRequest } from './ServiceTestUtils.js';
+import { connectUnauth, defineTestGrpcCases } from './ServiceTestUtils.js';
 import {
   BackupAuthCredential,
   GenericServerPublicParams,
@@ -34,9 +35,6 @@ describe('UnauthBackupsService', () => {
   const TEST_SIGNING_KEY = fromBase64(
     'KMhdmPEusAwoT3C2LzIbmGX6z+3HMbhgbrXmUwRfGF0='
   );
-  const TEST_SIGNING_KEY_PUB = fromBase64(
-    'BWp7eOx6q6IlijMPozln1bY34JoLFZhGu3PLDnn7hO9t'
-  );
   const EXPECTED_PRESENTATION = fromBase64(
     'AMkAAAAAAAAAAgAAAAAAAAAApJdpAAAAAIoiVNK2DtZIRFCtQxRiSokkSiQEKrUm86QgMg+qyZZjLuJipcWuggZt6au2i4MOhslTP4qafDZUYWZnKdX7zV4MKW1+FqHVi9kns3+gGaHRCrUEqKcTBzZj/C79ZRJObwIAAAAAAAAA7vpvGr5uokinX1GRCgDr5au1ajuE2naAsAUXPXXpxTyKZo+S3m3OdyDUusIM3sIyUFwM1OeMtmHLgDcuGAqKdYAAAAAAAAAAcqkJSxGNgTB4ERB7Qcg8tp+IZnEhGxCzuvY3KqrjgwA1LniEMcZCO9kjcSL2Q5JS5yZYrv7Kkn0p3hY4vIrKBlgb0zycYLKRrUj+ndkHKJtWV/2xC42jehDUc1P2ufIEJfu4ScD+sUt9fgAV7uDsKI/ktXnhUPT7/ZxtCCp88gEU4nTfVFvK9jOhY6HRLRf/'
   );
@@ -53,9 +51,13 @@ describe('UnauthBackupsService', () => {
     ['getMediaUploadForm', '/v1/archives/media/upload/form'] as const,
   ]) {
     describe(name, () => {
+      const grpcOverrides = ['BackupsAnonymousGetUploadForm'];
       it('returns different values if RNG is not provided', async () => {
         const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-        const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(tokio);
+        const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(
+          tokio,
+          grpcOverrides
+        );
         const _ignoredFuture1 = chat[name]({
           auth: TEST_AUTH,
           uploadSize: 12345,
@@ -74,7 +76,10 @@ describe('UnauthBackupsService', () => {
       });
       it('should property return an upload form', async () => {
         const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-        const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(tokio);
+        const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(
+          tokio,
+          grpcOverrides
+        );
         Native.TESTING_EnableDeterministicRngForTesting();
         const responseFuture = chat[name]({
           auth: TEST_AUTH,
@@ -124,7 +129,10 @@ describe('UnauthBackupsService', () => {
           [413, ErrorCode.UploadTooLarge],
         ]) {
           const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-          const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(tokio);
+          const [chat, fakeRemote] = connectUnauth<UnauthBackupsService>(
+            tokio,
+            grpcOverrides
+          );
           const responseFuture = chat[name]({
             auth: TEST_AUTH,
             uploadSize: 12345,
@@ -141,186 +149,345 @@ describe('UnauthBackupsService', () => {
     });
   }
 
-  async function testSimpleBackupRequestUnauthorized<T>(
-    requestName: string,
-    expectedRequest: Record<string, unknown>,
-    responseName: string,
-    sendRequest: (chat: UnauthBackupsService) => Promise<T>
-  ) {
-    const responseFuture = testSimpleGrpcRequest(
-      requestName,
-      expectedRequest,
-      responseName,
-      {
-        // There's no rule that says all the failed authentication responses HAVE to have the same oneof field name.
-        // But in practice they do.
-        failedAuthentication: {
-          description: 'bad auth',
-        },
-      },
-      sendRequest
-    );
-    await expect(responseFuture)
-      .to.eventually.be.rejectedWith(LibSignalErrorBase)
-      .and.deep.include({
-        code: ErrorCode.RequestUnauthorized,
-      });
-  }
-
-  const BACKUP_REQUEST_TEMPLATE: Record<string, unknown> = {
-    signedPresentation: {
-      presentation: toBase64(EXPECTED_PRESENTATION),
-      presentationSignature: toBase64(EXPECTED_SIGNATURE),
-    },
-  };
-
-  it('setPublicKey', async () => {
-    await testSimpleGrpcRequest(
-      'org.signal.chat.backup.SetPublicKeyRequest',
-      { publicKey: toBase64(TEST_SIGNING_KEY_PUB), ...BACKUP_REQUEST_TEMPLATE },
-      'org.signal.chat.backup.SetPublicKeyResponse',
-      { success: {} },
-      (chat) =>
-        chat.setBackupPublicKey({
+  describe('refresh', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_BackupSetPublicKeyTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.setBackupPublicKey({
           auth: TEST_AUTH,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
-    );
-    await testSimpleBackupRequestUnauthorized(
-      'org.signal.chat.backup.SetPublicKeyRequest',
-      { publicKey: toBase64(TEST_SIGNING_KEY_PUB), ...BACKUP_REQUEST_TEMPLATE },
-      'org.signal.chat.backup.SetPublicKeyResponse',
-      (chat) =>
-        chat.setBackupPublicKey({
-          auth: TEST_AUTH,
-          rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        switch (expected) {
+          case 'success':
+            (await actual) satisfies void;
+            break;
+          case 'credentialRejected':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+            break;
+          case 'missingResponse':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.IoError });
+            break;
+          default:
+            expected satisfies never;
+        }
+      }
     );
   });
 
-  it('getCdnCredentials', async () => {
-    const credentials = await testSimpleGrpcRequest(
-      'org.signal.chat.backup.GetCdnCredentialsRequest',
-      { cdn: 40, ...BACKUP_REQUEST_TEMPLATE },
-      'org.signal.chat.backup.GetCdnCredentialsResponse',
-      {
-        cdnCredentials: {
-          headers: {
-            b: 'bbb',
-            a: 'aaa',
-          },
-        },
-      },
-      (chat) =>
-        chat.getBackupCdnCredentials({
+  describe('getCdnCredentials', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_GetBackupCdnCredentialsTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, cdn, expected) => {
+        const actual = chat.getBackupCdnCredentials({
           auth: TEST_AUTH,
-          cdn: 40,
+          cdn,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
-    );
-    expect(credentials).to.deep.equal({
-      headers: new Map([
-        ['a', 'aaa'],
-        ['b', 'bbb'],
-      ]),
-    });
-
-    await testSimpleBackupRequestUnauthorized(
-      'org.signal.chat.backup.GetCdnCredentialsRequest',
-      { cdn: 40, ...BACKUP_REQUEST_TEMPLATE },
-      'org.signal.chat.backup.GetCdnCredentialsResponse',
-      (chat) =>
-        chat.getBackupCdnCredentials({
-          auth: TEST_AUTH,
-          cdn: 40,
-          rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        if (typeof expected !== 'string') {
+          expect(await actual).to.deep.equal(expected.success);
+        } else {
+          switch (expected) {
+            case 'credentialRejected':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+              break;
+            case 'missingResponse':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.IoError });
+              break;
+            default:
+              expected satisfies never;
+          }
+        }
+      }
     );
   });
 
-  it('getSvrBCredentials', async () => {
-    const credentials = await testSimpleGrpcRequest(
-      'org.signal.chat.backup.GetSvrBCredentialsRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.GetSvrBCredentialsResponse',
-      {
-        svrbCredentials: {
-          username: 'user',
-          password: 'pass',
-        },
-      },
-      (chat) =>
-        chat.getBackupSvrBCredentials({
+  describe('getMessageBackupInfo', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_GetMessageBackupInfoTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.getMessageBackupInfo({
           auth: TEST_AUTH,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
-    );
-    expect(credentials).to.deep.equal({
-      username: 'user',
-      password: 'pass',
-    });
-
-    await testSimpleBackupRequestUnauthorized(
-      'org.signal.chat.backup.GetSvrBCredentialsRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.GetSvrBCredentialsResponse',
-      (chat) =>
-        chat.getBackupSvrBCredentials({
-          auth: TEST_AUTH,
-          rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        if (typeof expected !== 'string') {
+          expect(await actual).to.deep.equal(expected.success);
+        } else {
+          switch (expected) {
+            case 'credentialRejected':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+              break;
+            case 'missingResponse':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.IoError });
+              break;
+            default:
+              expected satisfies never;
+          }
+        }
+      }
     );
   });
 
-  it('refresh', async () => {
-    await testSimpleGrpcRequest(
-      'org.signal.chat.backup.RefreshRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.RefreshResponse',
-      {
-        success: {},
-      },
-      (chat) =>
-        chat.refreshBackup({
+  describe('getMediaBackupInfo', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_GetMediaBackupInfoTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.getMediaBackupInfo({
           auth: TEST_AUTH,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
-    );
-    await testSimpleBackupRequestUnauthorized(
-      'org.signal.chat.backup.RefreshRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.RefreshResponse',
-      (chat) =>
-        chat.refreshBackup({
-          auth: TEST_AUTH,
-          rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        if (typeof expected !== 'string') {
+          expect(await actual).to.deep.equal(expected.success);
+        } else {
+          switch (expected) {
+            case 'credentialRejected':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+              break;
+            case 'missingResponse':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.IoError });
+              break;
+            default:
+              expected satisfies never;
+          }
+        }
+      }
     );
   });
 
-  it('deleteAll', async () => {
-    await testSimpleGrpcRequest(
-      'org.signal.chat.backup.DeleteAllRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.DeleteAllResponse',
-      {
-        success: {},
-      },
-      (chat) =>
-        chat.backupDeleteAll({
+  describe('getSvrBCredentials', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_GetBackupSvrBCredentialsTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.getBackupSvrBCredentials({
           auth: TEST_AUTH,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        if (typeof expected !== 'string') {
+          expect(await actual).to.deep.equal(expected.success);
+        } else {
+          switch (expected) {
+            case 'credentialRejected':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+              break;
+            case 'missingResponse':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.IoError });
+              break;
+            default:
+              expected satisfies never;
+          }
+        }
+      }
     );
-    await testSimpleBackupRequestUnauthorized(
-      'org.signal.chat.backup.DeleteAllRequest',
-      BACKUP_REQUEST_TEMPLATE,
-      'org.signal.chat.backup.DeleteAllResponse',
-      (chat) =>
-        chat.backupDeleteAll({
+  });
+
+  describe('refresh', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_BackupRefreshTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.refreshBackup({
           auth: TEST_AUTH,
           rng: { __deterministicRngSeedForTesting: 0 },
-        })
+        });
+        switch (expected) {
+          case 'success':
+            (await actual) satisfies void;
+            break;
+          case 'credentialRejected':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+            break;
+          case 'missingResponse':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.IoError });
+            break;
+          default:
+            expected satisfies never;
+        }
+      }
+    );
+  });
+
+  describe('deleteAll', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_BackupDeleteAllTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, _args, expected) => {
+        const actual = chat.backupDeleteAll({
+          auth: TEST_AUTH,
+          rng: { __deterministicRngSeedForTesting: 0 },
+        });
+        switch (expected) {
+          case 'success':
+            (await actual) satisfies void;
+            break;
+          case 'credentialRejected':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+            break;
+          case 'missingResponse':
+            await expect(actual)
+              .to.eventually.be.rejectedWith(LibSignalErrorBase)
+              .and.deep.include({ code: ErrorCode.IoError });
+            break;
+          default:
+            expected satisfies never;
+        }
+      }
+    );
+  });
+
+  describe('copyBackupMedia', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_CopyBackupMediaTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, items, expected) => {
+        const stream = chat.copyBackupMedia({
+          auth: TEST_AUTH,
+          items: items.map((next) => ({
+            ...next,
+            objectLength: Number(next.objectLength),
+          })),
+          rng: { __deterministicRngSeedForTesting: 0 },
+        });
+        const [actualItems, maybeError] = await util.collectUntilError(stream);
+
+        for (const nextExpected of expected) {
+          if (typeof nextExpected === 'object') {
+            const actualItem = actualItems.shift();
+            expect(actualItem?.mediaId).deep.equals(nextExpected.item.mediaId);
+            const expectedResult = nextExpected.item.result;
+            expect(actualItem?.result).deep.equals(
+              typeof expectedResult === 'object'
+                ? { cdn: expectedResult.success }
+                : expectedResult
+            );
+          } else {
+            switch (nextExpected) {
+              case 'invalidDataInStream':
+              case 'credentialRejectedWithoutAppropriateServerInfo':
+                expect(maybeError)
+                  .instanceOf(LibSignalErrorBase)
+                  .with.property('code', ErrorCode.IoError);
+                break;
+              case 'credentialRejected':
+                expect(maybeError)
+                  .instanceOf(LibSignalErrorBase)
+                  .with.property('code', ErrorCode.RequestUnauthorized);
+                break;
+              default:
+                nextExpected satisfies never;
+            }
+          }
+        }
+        expect(actualItems).deep.equals([]);
+      }
+    );
+  });
+
+  describe('deleteBackupMedia', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_DeleteBackupMediaTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, items, expected) => {
+        const stream = chat.deleteBackupMedia({
+          auth: TEST_AUTH,
+          items,
+          rng: { __deterministicRngSeedForTesting: 0 },
+        });
+        const [actualItems, maybeError] = await util.collectUntilError(stream);
+
+        for (const nextExpected of expected) {
+          if (typeof nextExpected === 'object') {
+            const actualItem = actualItems.shift();
+            expect(actualItem).deep.equals(nextExpected.item);
+          } else {
+            switch (nextExpected) {
+              case 'invalidDataInStream':
+              case 'credentialRejectedWithoutAppropriateServerInfo':
+                expect(maybeError)
+                  .instanceOf(LibSignalErrorBase)
+                  .with.property('code', ErrorCode.IoError);
+                break;
+              case 'credentialRejected':
+                expect(maybeError)
+                  .instanceOf(LibSignalErrorBase)
+                  .with.property('code', ErrorCode.RequestUnauthorized);
+                break;
+              default:
+                nextExpected satisfies never;
+            }
+          }
+        }
+        expect(actualItems).deep.equals([]);
+      }
+    );
+  });
+
+  describe('listBackupMedia', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_BackupListMediaTests(),
+      connectUnauth<UnauthBackupsService>,
+      async (chat, { cursor, limit }, expected) => {
+        const actual = chat.listBackupMedia({
+          auth: TEST_AUTH,
+          cursor: cursor ?? undefined,
+          limit: limit < 0 ? undefined : limit,
+          rng: { __deterministicRngSeedForTesting: 0 },
+        });
+        if (typeof expected !== 'string') {
+          const expectedPage: Partial<NativeNice.ListMediaResponse> =
+            expected.page;
+          // Convert `cursor: string | null` representation to `cursor?: string`.
+          if (!expectedPage.cursor) {
+            delete expectedPage.cursor;
+          }
+          expect(await actual).to.deep.equal(expectedPage);
+        } else {
+          switch (expected) {
+            case 'credentialRejected':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.RequestUnauthorized });
+              break;
+            case 'malformedMediaId':
+            case 'missingResponse':
+              await expect(actual)
+                .to.eventually.be.rejectedWith(LibSignalErrorBase)
+                .and.deep.include({ code: ErrorCode.IoError });
+              break;
+            default:
+              expected satisfies never;
+          }
+        }
+      }
     );
   });
 });

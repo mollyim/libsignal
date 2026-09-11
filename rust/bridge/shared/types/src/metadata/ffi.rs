@@ -29,16 +29,38 @@ pub struct NiceFunction {
     pub return_type: SwiftReturnConverter,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct FfiBorrowedSliceConstructor {
-    pub converter_type: String,
-    pub borrowed_slice: String,
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CStructGenericInstance<Type = capi::RustType> {
+    pub monomorph: Type,
+    pub ty_args: Vec<Type>,
+    pub field_types: Vec<Type>,
+}
+impl<Type> CStructGenericInstance<Type> {
+    pub fn map<U>(&self, mut mapper: impl FnMut(&Type) -> U) -> CStructGenericInstance<U> {
+        let monomorph = mapper(&self.monomorph);
+        let ty_args = self.ty_args.iter().map(&mut mapper).collect();
+        let field_types = self.field_types.iter().map(&mut mapper).collect();
+        CStructGenericInstance {
+            monomorph,
+            ty_args,
+            field_types,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct FfiOwnedBufferOfMaxAlignedProject {
-    pub converter_type: String,
-    pub buffer_type: String,
+#[derive(Debug, Clone, Serialize)]
+pub struct CStructGeneric {
+    /// An ID of the Rust generic, used for assertion checks.
+    ///
+    /// `RustType::of::<Option<i32>> != RustType::of::<Option<bool>>`. But the generic ID should
+    /// be the same across both.
+    #[serde(skip)]
+    pub generic_id: u64,
+    /// Generic argument names
+    pub ty_arg_names: Vec<String>,
+    pub field_names: Vec<String>,
+    /// Instances of the generic
+    pub instances: BTreeSet<CStructGenericInstance>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -47,20 +69,18 @@ pub struct SwiftMetadataContext {
 
     pub fixed_byte_array_lengths: BTreeSet<usize>,
 
-    pub derived_types: BTreeMap<String, StructOrEnum<NiceType>>,
-    pub derived_return_converters: BTreeMap<String, StructOrEnum<SwiftReturnConverter>>,
-    pub derived_arg_converters: BTreeMap<String, StructOrEnum<SwiftArgConverter>>,
-
-    /// Map from the name of a `FfiBorrowedSliceConstructor` to information about the constructor
-    pub ffi_borrowed_slice_cons: BTreeMap<String, FfiBorrowedSliceConstructor>,
-    /// Map from the name of a `FfiOwnedBufferOfMaxAlignedProject` to information about the constructor
-    pub ffi_owned_buffer_of_max_aligned_project:
-        BTreeMap<String, FfiOwnedBufferOfMaxAlignedProject>,
+    pub derived_types: BTreeMap<String, DerivedType<NiceType>>,
+    pub derived_types_equatable: BTreeSet<String>,
+    pub derived_return_converters: BTreeMap<String, DerivedType<SwiftReturnConverter>>,
+    pub derived_arg_converters: BTreeMap<String, DerivedType<SwiftArgConverter>>,
 
     pub c_types: BTreeMap<capi::RustType, Arc<capi::CType>>,
     pub c_struct_offsets: BTreeMap<capi::RustType, BTreeMap<String, usize>>,
     pub c_functions: BTreeMap<String, capi::CFunctionPrototype>,
     pub c_extra_typedefs: BTreeSet<String>,
+
+    /// Map from name of the generic type name to generic type info.
+    pub c_structs_generic: BTreeMap<String, CStructGeneric>,
 }
 
 /// These functions should mutate the attached [SwiftMetadataContext] to register their item.

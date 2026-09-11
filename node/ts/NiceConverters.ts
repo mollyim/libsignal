@@ -4,8 +4,10 @@
 //
 
 import { ServiceId } from './Address.js';
-import { type CdnCredentials } from './net/chat/CdnCredentials.js';
+import type { CdnCredentials } from './net/chat/CdnCredentials.js';
 import * as Native from './Native.js';
+import { newNativeHandle, wrapStream } from './internal.js';
+import type { TokioAsyncContext } from './net.js';
 
 export type DeviceId = number;
 /**
@@ -31,6 +33,32 @@ export function cdnCredentialReturnConverter(
   };
 }
 
+export function copyBackupMediaStreamConverter(
+  streamHandle: Native.CopyBackupMediaStream
+): (
+  asyncContext: TokioAsyncContext
+) => ReadableStream<Native.ReturnFfiBridgeCopyBackupMediaOutcome> {
+  return (asyncContext) => {
+    return wrapStream(asyncContext, newNativeHandle(streamHandle), {
+      pull: Native.CopyBackupMediaStream_next,
+      cancel: Native.CopyBackupMediaStream_cancel,
+    });
+  };
+}
+
+export function deleteBackupMediaStreamConverter(
+  streamHandle: Native.DeleteBackupMediaStream
+): (
+  asyncContext: TokioAsyncContext
+) => ReadableStream<Native.ReturnFfiBridgeDeleteBackupMediaItem> {
+  return (asyncContext) => {
+    return wrapStream(asyncContext, newNativeHandle(streamHandle), {
+      pull: Native.DeleteBackupMediaStream_next,
+      cancel: Native.DeleteBackupMediaStream_cancel,
+    });
+  };
+}
+
 export function grpcTestCaseConverter<ReqIn, ReqOut, RespIn, RespOut>(
   reqConverter: (x: ReqIn) => ReqOut,
   respConverter: (x: RespIn) => RespOut
@@ -51,5 +79,14 @@ export function grpcTestCaseConverter<ReqIn, ReqOut, RespIn, RespOut>(
         response: respConverter(response),
       };
     });
+  };
+}
+
+export function liftNull<In, Out>(
+  f: (x: In) => Out
+): (x: In | null) => Out | null {
+  return function (x: In | null): Out | null {
+    if (x === null) return null;
+    return f(x);
   };
 }

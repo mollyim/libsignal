@@ -40,7 +40,7 @@ export function connectUnauth<
   Api extends Subset<UnauthenticatedChatConnection, Api> = object
 >(
   tokio: TokioAsyncContext,
-  grpcOverrides?: [string]
+  grpcOverrides?: string[]
 ): [PickSubset<UnauthenticatedChatConnection, Api>, FakeChatRemote] {
   return UnauthenticatedChatConnection.fakeConnect(
     tokio,
@@ -62,37 +62,18 @@ export function connectAuth<
   // the result.
   Api extends Subset<AuthenticatedChatConnection, Api> = object
 >(
-  tokio: TokioAsyncContext
+  tokio: TokioAsyncContext,
+  grpcOverrides?: string[]
 ): [PickSubset<AuthenticatedChatConnection, Api>, FakeChatRemote] {
-  return AuthenticatedChatConnection.fakeConnect(tokio, {
-    onConnectionInterrupted: () => {},
-    onIncomingMessage: () => {},
-    onQueueEmpty: () => {},
-  });
-}
-
-export async function testSimpleGrpcRequest<
-  T,
-  S extends Subset<UnauthenticatedChatConnection, S>
->(
-  requestName: string,
-  expectedRequest: Record<string, unknown>,
-  responseName: string,
-  response: Record<string, unknown>,
-  sendRequest: (
-    service: PickSubset<UnauthenticatedChatConnection, S>
-  ) => Promise<T>
-): Promise<T> {
-  Native.TESTING_EnableDeterministicRngForTesting();
-  const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
-  const [chat, fakeRemote] = connectUnauth<S>(tokio);
-  const responseFuture = sendRequest(chat);
-
-  const request = await fakeRemote.assertReceiveIncomingGrpcRequest();
-  expect(request.getSingleGrpcMessage(requestName)).to.deep.eq(expectedRequest);
-  await fakeRemote.sendGrpcReplyTo(request, responseName, response);
-
-  return await responseFuture;
+  return AuthenticatedChatConnection.fakeConnect(
+    tokio,
+    {
+      onConnectionInterrupted: () => {},
+      onIncomingMessage: () => {},
+      onQueueEmpty: () => {},
+    },
+    grpcOverrides
+  );
 }
 
 export function defineTestGrpcCases<
@@ -110,6 +91,7 @@ export function defineTestGrpcCases<
   tests.forEach((test) => {
     // "void" is needed since eslint doesn't realize that it() doesn't return a promise
     void it(test.name, async () => {
+      Native.TESTING_EnableDeterministicRngForTesting();
       const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
       const [chat, fakeRemote] = connect(tokio);
       const responseFuture = check(chat, test.request, test.response);

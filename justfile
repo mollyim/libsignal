@@ -7,8 +7,16 @@ _default:
     echo "no default recipe; run with --list to see all recipes"
     exit 1
 
+# Install the stable toolchain pinned in rust-toolchain; extra args go to rustup.
+install-stable *args:
+    rustup toolchain install "$(cat rust-toolchain)" --profile minimal --component rustfmt,clippy {{args}}
+
+# Install the nightly toolchain pinned in .nightly-rust-version; extra args go to rustup.
+install-nightly *args:
+    rustup toolchain install "$(cat .nightly-rust-version)" --profile minimal --component rustfmt,clippy {{args}}
+
 generate-jni:
-    rust/bridge/jni/bin/gen_java_decl.py
+    cargo run -p libsignal-jni-native_kt
 
 generate-ffi:
     swift/build_ffi.sh --generate-ffi
@@ -43,19 +51,33 @@ format-ffi:
 format-node:
     (cd node && npm run format)
 
+# Format Rust code with the nightly toolchain pinned in .nightly-rust-version.
+format-rust *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The options in .rustfmt.toml are still unstable, so the default stable
+    # toolchain would ignore them.
+    toolchain="$(cat .nightly-rust-version)"
+    if ! rustup component list --toolchain "$toolchain" --installed 2>/dev/null | grep -q '^rustfmt'; then
+        echo "$toolchain is not installed with rustfmt; run \`just install-nightly\`" >&2
+        exit 1
+    fi
+    cargo "+$toolchain" fmt --all {{args}}
+    # Not part of the main workspace, so it needs its own invocation.
+    cd rust/protocol/cross-version-testing && cargo "+$toolchain" fmt --all {{args}}
+
 alias format-java := format-jni
 alias format-swift := format-ffi
 alias format-ts := format-node
 
 # Auto-format code in Java, Rust, Swift, and TypeScript
 [parallel]
-format-all: format-jni format-ffi format-node
-    cargo fmt
+format-all: format-jni format-ffi format-node format-rust
     taplo fmt
 
 # Same as format-all, but does not actually make changes; merely fails if code is not yet formatted.
 check-format-all:
-    cargo fmt --all -- --check
+    just format-rust -- --check
     taplo fmt --check
     @echo 'warning: `swift format` does not have a check mode'
     (cd node && npm run format-check)
@@ -74,5 +96,5 @@ check-pre-commit: check-format-all check-python check-acknowledgments
     shellcheck -- **/*.sh bin/verify_duplicate_crates bin/adb-run-test
     cargo test --workspace --all-features --verbose --no-fail-fast -- --include-ignored
     cargo clippy --workspace --all-targets --all-features --keep-going -- -D warnings
-    env "CARGO_TARGET_DIR=$PWD/target/without_building_boring" "CARGO_RESOLVER_LOCKFILE_PATH=$(mktemp -d)/Cargo.lock" bin/without_building_boring.sh cargo check --workspace --all-targets --all-features --keep-going -Zdirect-minimal-versions -Zlockfile-path
+    env "RUSTUP_TOOLCHAIN=$(cat .nightly-rust-version)" "CARGO_TARGET_DIR=$PWD/target/without_building_boring" "CARGO_RESOLVER_LOCKFILE_PATH=$(mktemp -d)/Cargo.lock" bin/without_building_boring.sh cargo check --workspace --all-targets --all-features --keep-going -Zdirect-minimal-versions -Zlockfile-path
     @printf "\e[32mBasic pre-commit checks passed! ✅ Hopefully good to push! 🤞\e[0m\n"

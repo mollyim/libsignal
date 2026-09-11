@@ -17,7 +17,7 @@
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 
-use curve25519_dalek_signal::{RistrettoPoint, Scalar};
+use curve25519_dalek::{RistrettoPoint, Scalar};
 use partial_default::PartialDefault;
 use poksho::ShoApi;
 use poksho::shoapi::ShoApiExt as _;
@@ -51,7 +51,8 @@ fn nonce_to_point(nonce: &NonceBytes) -> RistrettoPoint {
 /// A key pair used to issue and verify donation permits for a particular expiration.
 ///
 /// These are intended to be cheaply cached; the redeeming server only needs the derived key pair,
-/// never the root secret.
+/// never the root secret. (Note that this is not a security boundary: the root secret can be
+/// recovered from the derived key pair.)
 #[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct DonationPermitDerivedKeyPair {
     reserved: ReservedByte,
