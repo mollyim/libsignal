@@ -97,9 +97,6 @@ FROM toolchain AS source
 WORKDIR /libsignal
 COPY . .
 
-# If a Git checkout is present, remove untracked files so builds start from a clean tree.
-RUN test ! -e .git || git clean -ffdx
-
 FROM source AS deps-overlay
 
 # Stage 4: deps-overlay
