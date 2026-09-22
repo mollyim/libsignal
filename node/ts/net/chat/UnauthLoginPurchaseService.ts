@@ -14,17 +14,12 @@ import type {
   StandardNetworkError,
 } from '../../Errors.js';
 import type { Timestamp } from '../../NiceConverters.js';
+import type { PaymentProvider } from './PurchaseTypes.js';
 
 declare module '../Chat' {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface UnauthenticatedChatConnection extends UnauthLoginPurchaseService {}
 }
-
-export type PaymentProvider =
-  | 'googlePlayBilling'
-  | 'appleAppStore'
-  | 'stripe'
-  | 'braintree';
 
 export type ReceiptCredentialError =
   | ReceiptCredentialErrorPaymentNotFound
