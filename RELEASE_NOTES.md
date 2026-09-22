@@ -1,3 +1,2 @@
-v0.103.1
+v0.103.2
 
-- Swift: BackupJsonExporter is now available
