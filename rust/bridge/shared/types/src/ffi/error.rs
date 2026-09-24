@@ -20,9 +20,10 @@ use libsignal_net_chat::api::backups::{BackupAuthCredentialRejected, GetUploadFo
 use libsignal_net_chat::api::keys::GetPreKeysFailure;
 use libsignal_net_chat::api::keytrans::Error as KeyTransError;
 use libsignal_net_chat::api::messages::{MismatchedDeviceError, UploadTooLarge};
+use libsignal_net_chat::api::purchase::ChargeFailure;
 use libsignal_net_chat::api::registration::{RegistrationLock, VerificationCodeNotDeliverable};
 use libsignal_net_chat::grpc::devices::DeviceIdNotFoundInAccount;
-use libsignal_net_chat::grpc::login_purchase::{ChargeFailure, ReceiptCredentialError};
+use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::UsernameNotAvailable;
 use libsignal_protocol::*;
 use signal_crypto::Error as SignalCryptoError;

@@ -2235,7 +2235,7 @@ macro_rules! simple_optional {
 }
 simple_optional!(f32);
 simple_optional!(Vec<u8>);
-return_optional!(libsignal_net_chat::grpc::login_purchase::ChargeFailure);
+return_optional!(libsignal_net_chat::api::purchase::ChargeFailure);
 return_optional!(crate::net::chat::remote_derives::BridgeWebAuthnAuthenticationParameters);
 
 #[cfg(test)]

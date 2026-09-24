@@ -40,6 +40,7 @@ use libsignal_net_chat::api::messages::{
     UploadTooLarge, UserBasedSendAuthorization,
 };
 use libsignal_net_chat::api::profiles::UnauthenticatedAccountExistenceApi;
+use libsignal_net_chat::api::purchase::PaymentProvider;
 use libsignal_net_chat::api::usernames::UnauthenticatedChatApi as _;
 use libsignal_net_chat::api::{RequestError, UploadForm, UserBasedAuthorization};
 use libsignal_net_chat::grpc::accounts::{
@@ -52,7 +53,7 @@ use libsignal_net_chat::grpc::devices::{
     DeviceCapability, DeviceIdNotFoundInAccount, LinkedDevice,
 };
 use libsignal_net_chat::grpc::keys::{PublicEcPreKey, PublicKemPreKey, PublicSignedEcPreKey};
-use libsignal_net_chat::grpc::login_purchase::{PaymentProvider, ReceiptCredentialError};
+use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::{ConfirmUsernameError, UsernameNotAvailable};
 use libsignal_net_chat::stream_util::{BulkPolledStreamChunk, BulkPolledStreamTerminationReason};
 use libsignal_net_chat::ws::OverWs;

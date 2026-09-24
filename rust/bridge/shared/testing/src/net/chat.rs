@@ -508,10 +508,9 @@ mod remote_derives {
         BridgeMediaBackupInfo, BridgeMessageBackupInfo, BridgeMfaMetadata, BridgePendingTotpKey,
         BridgeWebAuthnCreateParameters,
     };
+    use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
     use libsignal_net_chat::grpc::devices::{DeviceCapability, LinkedDevice};
-    use libsignal_net_chat::grpc::login_purchase::{
-        ChargeFailure, PaymentProvider, ReceiptCredentialError as ReceiptCredentialErrorReal,
-    };
+    use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError as ReceiptCredentialErrorReal;
     use libsignal_protocol::Timestamp;
     use uuid::Uuid;
 

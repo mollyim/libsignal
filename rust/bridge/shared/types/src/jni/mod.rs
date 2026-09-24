@@ -416,7 +416,7 @@ static _FORCE_CHARGE_FAILURE_CONVERTER_TO_BE_EMITTED: crate::metadata::FnWithMod
 > = crate::metadata::FnWithModule {
     module_path: module_path!(),
     apply: |ctx| {
-        use libsignal_net_chat::grpc::login_purchase::ChargeFailure;
+        use libsignal_net_chat::api::purchase::ChargeFailure;
         ChargeFailure::register_kt_result_converter(ctx);
     },
 };

@@ -1147,8 +1147,8 @@ impl SignalNodeError for ReceiptCredentialError {
                     .map(|cf| {
                         // We can't use the nice converters here because we _directly_ throw an
                         // unconverted value.
-                        use libsignal_net_chat::grpc::login_purchase::PaymentProvider;
-                        let libsignal_net_chat::grpc::login_purchase::ChargeFailure {
+                        use libsignal_net_chat::api::purchase::PaymentProvider;
+                        let libsignal_net_chat::api::purchase::ChargeFailure {
                             processor,
                             code,
                             message,

@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+use std::convert::Infallible;
+
 use libsignal_net_grpc::proto::chat::errors::{FailedPrecondition, NotFound};
-use libsignal_net_grpc::proto::chat::login_purchase::create_login_receipt_credential_response::Response as CreateLoginReceiptCredentialResponseEnum;
-use libsignal_net_grpc::proto::chat::login_purchase::login_purchase_client::LoginPurchaseClient;
-use libsignal_net_grpc::proto::chat::login_purchase::{
+use libsignal_net_grpc::proto::chat::purchase::create_login_receipt_credential_response::Response as CreateLoginReceiptCredentialResponseEnum;
+use libsignal_net_grpc::proto::chat::purchase::login_purchase_client::LoginPurchaseClient;
+use libsignal_net_grpc::proto::chat::purchase::{
     ChargeFailure as GrpcChargeFailure, CreateLoginReceiptCredentialRequest,
     PaymentProvider as GrpcPaymentProvider,
 };
@@ -16,53 +18,61 @@ use zkgroup::receipts::{
 };
 use zkgroup::{ReceiptLevel, SECONDS_PER_DAY, ServerPublicParams, ZkGroupVerificationFailure};
 
+use crate::api::purchase::{ChargeFailure, PaymentProvider};
 use crate::api::{RequestError, Unauth};
 use crate::grpc::{GrpcServiceProvider, log_and_send};
 use crate::logging::Redact;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PaymentProvider {
-    GooglePlayBilling,
-    AppleAppStore,
-    Stripe,
-    Braintree,
+impl From<PaymentProvider> for GrpcPaymentProvider {
+    fn from(value: PaymentProvider) -> Self {
+        match value {
+            PaymentProvider::GooglePlayBilling => Self::GooglePlayBilling,
+            PaymentProvider::AppleAppStore => Self::AppleAppStore,
+            PaymentProvider::Stripe => Self::Stripe,
+            PaymentProvider::Braintree => Self::Braintree,
+        }
+    }
 }
 
-/// Information about a charge failure.
-///
-/// Meaningfully interpreting chargeFailure response fields requires inspecting the processor field
-/// first.
-///
-/// For Stripe, code will be one of the [codes defined here](https://stripe.com/docs/api/charges/object#charge_object-failure_code),
-/// while message [may contain a further textual description](https://stripe.com/docs/api/charges/object#charge_object-failure_message).
-/// The outcome fields are optional, but present values will directly map to Stripe
-/// [response properties](https://stripe.com/docs/api/charges/object#charge_object-outcome-network_status)
-///
-/// For Braintree, the outcome fields will be null. The code and message will contain one of
-///   - a processor decline code (as a string) in code, and associated text in message, as defined
-///     this [table](https://developer.paypal.com/braintree/docs/reference/general/processor-responses/authorization-responses)
-///   - `gateway` in code, with a [reason](https://developer.paypal.com/braintree/articles/control-panel/transactions/gateway-rejections) in message
-///   - `code` = "unknown", message = "unknown"
-///
-/// IAP payment processors will never include charge failure information, and detailed order
-/// information should be retrieved from the payment processor directly.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ChargeFailure {
-    pub processor: PaymentProvider,
-    /// See [Stripe failure codes](https://stripe.com/docs/api/charges/object#charge_object-failure_code)
-    /// or [Braintree decline codes](https://developer.paypal.com/braintree/docs/reference/general/processor-responses/authorization-responses#decline-codes)
-    /// depending on which processor was used
-    pub code: String,
-    /// See [Stripe failure codes](https://stripe.com/docs/api/charges/object#charge_object-failure_code)
-    /// or [Braintree decline codes](https://developer.paypal.com/braintree/docs/reference/general/processor-responses/authorization-responses#decline-codes)
-    /// depending on which processor was used
-    pub message: String,
-    /// See [Outcome Network Status](https://stripe.com/docs/api/charges/object#charge_object-outcome-network_status)
-    pub outcome_network_status: Option<String>,
-    /// See [Outcome Reason](https://stripe.com/docs/api/charges/object#charge_object-outcome-reason)
-    pub outcome_reason: Option<String>,
-    /// See [Outcome Type](https://stripe.com/docs/api/charges/object#charge_object-outcome-type)
-    pub outcome_type: Option<String>,
+impl TryFrom<GrpcPaymentProvider> for PaymentProvider {
+    type Error = RequestError<Infallible>;
+
+    fn try_from(value: GrpcPaymentProvider) -> Result<Self, Self::Error> {
+        match value {
+            GrpcPaymentProvider::Unknown => Err(RequestError::Unexpected {
+                log_safe: "Unknown returned payment provider".into(),
+            }),
+            GrpcPaymentProvider::Stripe => Ok(PaymentProvider::Stripe),
+            GrpcPaymentProvider::Braintree => Ok(PaymentProvider::Braintree),
+            GrpcPaymentProvider::GooglePlayBilling => Ok(PaymentProvider::GooglePlayBilling),
+            GrpcPaymentProvider::AppleAppStore => Ok(PaymentProvider::AppleAppStore),
+        }
+    }
+}
+
+impl TryFrom<GrpcChargeFailure> for ChargeFailure {
+    type Error = RequestError<Infallible>;
+
+    fn try_from(value: GrpcChargeFailure) -> Result<Self, Self::Error> {
+        let GrpcChargeFailure {
+            processor,
+            code,
+            message,
+            outcome_network_status,
+            outcome_reason,
+            outcome_type,
+        } = value;
+        Ok(ChargeFailure {
+            processor: GrpcPaymentProvider::try_from(processor)
+                .unwrap_or_default()
+                .try_into()?,
+            code,
+            message,
+            outcome_network_status,
+            outcome_reason,
+            outcome_type,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, displaydoc::Display)]
@@ -127,12 +137,7 @@ impl<T: GrpcServiceProvider> Unauth<T> {
     ) -> Result<ReceiptCredential, RequestError<ReceiptCredentialError>> {
         let mut client = LoginPurchaseClient::new(self.0.service());
         let request = CreateLoginReceiptCredentialRequest {
-            processor: match payment_processor {
-                PaymentProvider::GooglePlayBilling => GrpcPaymentProvider::GooglePlayBilling.into(),
-                PaymentProvider::AppleAppStore => GrpcPaymentProvider::AppleAppStore.into(),
-                PaymentProvider::Stripe => GrpcPaymentProvider::Stripe.into(),
-                PaymentProvider::Braintree => GrpcPaymentProvider::Braintree.into(),
-            },
+            processor: GrpcPaymentProvider::from(payment_processor).into(),
             purchase_identifier,
             receipt_credential_request: zkgroup::serialize(
                 &receipt_credential_request_context.get_request(),
@@ -200,43 +205,9 @@ impl<T: GrpcServiceProvider> Unauth<T> {
                 RequestError::Other(ReceiptCredentialError::PaymentRequired {
                     charge_failure: payment_required
                         .charge_failure
-                        .map(
-                            |GrpcChargeFailure {
-                                 processor,
-                                 code,
-                                 message,
-                                 outcome_network_status,
-                                 outcome_reason,
-                                 outcome_type,
-                             }| {
-                                Ok(Box::new(ChargeFailure {
-                                    processor: match GrpcPaymentProvider::try_from(processor) {
-                                        Err(_) | Ok(GrpcPaymentProvider::Unknown) => {
-                                            return Err(RequestError::Unexpected {
-                                                log_safe: "Unknown returned payment provider"
-                                                    .into(),
-                                            });
-                                        }
-                                        Ok(GrpcPaymentProvider::Stripe) => PaymentProvider::Stripe,
-                                        Ok(GrpcPaymentProvider::Braintree) => {
-                                            PaymentProvider::Braintree
-                                        }
-                                        Ok(GrpcPaymentProvider::GooglePlayBilling) => {
-                                            PaymentProvider::GooglePlayBilling
-                                        }
-                                        Ok(GrpcPaymentProvider::AppleAppStore) => {
-                                            PaymentProvider::AppleAppStore
-                                        }
-                                    },
-                                    code,
-                                    message,
-                                    outcome_network_status,
-                                    outcome_reason,
-                                    outcome_type,
-                                }))
-                            },
-                        )
-                        .transpose()?,
+                        .map(|charge_failure| Ok(Box::new(charge_failure.try_into()?)))
+                        .transpose()
+                        .map_err(RequestError::with_other)?,
                 }),
             ),
             CreateLoginReceiptCredentialResponseEnum::PaymentNotFound(NotFound {}) => {
@@ -258,8 +229,8 @@ impl<T: GrpcServiceProvider> Unauth<T> {
 
 pub mod test_cases {
     use libsignal_net_grpc::proto::chat::errors::{FailedPrecondition, NotFound};
-    use libsignal_net_grpc::proto::chat::login_purchase::CreateLoginReceiptCredentialResponse;
-    use libsignal_net_grpc::proto::chat::login_purchase::create_login_receipt_credential_response::CreateLoginReceiptCredentialResult;
+    use libsignal_net_grpc::proto::chat::purchase::CreateLoginReceiptCredentialResponse;
+    use libsignal_net_grpc::proto::chat::purchase::create_login_receipt_credential_response::CreateLoginReceiptCredentialResult;
     use zkgroup::{SECONDS_PER_DAY, ServerSecretParams};
 
     use super::*;
@@ -477,7 +448,7 @@ pub mod test_cases {
             request_grpc: gplay_grpc_request.clone(),
             response_grpc: CreateLoginReceiptCredentialResponse {
                 response: Some(CreateLoginReceiptCredentialResponseEnum::PaymentRequired(
-                    libsignal_net_grpc::proto::chat::login_purchase::PaymentRequired {
+                    libsignal_net_grpc::proto::chat::purchase::PaymentRequired {
                         charge_failure: None,
                     },
                 )),
@@ -495,7 +466,7 @@ pub mod test_cases {
             request_grpc: gplay_grpc_request.clone(),
             response_grpc: CreateLoginReceiptCredentialResponse {
                 response: Some(CreateLoginReceiptCredentialResponseEnum::PaymentRequired(
-                    libsignal_net_grpc::proto::chat::login_purchase::PaymentRequired {
+                    libsignal_net_grpc::proto::chat::purchase::PaymentRequired {
                         charge_failure: Some(GrpcChargeFailure {
                             processor: GrpcPaymentProvider::GooglePlayBilling.into(),
                             code: "code".into(),
@@ -527,7 +498,7 @@ pub mod test_cases {
             request_grpc: gplay_grpc_request.clone(),
             response_grpc: CreateLoginReceiptCredentialResponse {
                 response: Some(CreateLoginReceiptCredentialResponseEnum::PaymentRequired(
-                    libsignal_net_grpc::proto::chat::login_purchase::PaymentRequired {
+                    libsignal_net_grpc::proto::chat::purchase::PaymentRequired {
                         charge_failure: Some(GrpcChargeFailure {
                             processor: GrpcPaymentProvider::GooglePlayBilling.into(),
                             code: "code".into(),
