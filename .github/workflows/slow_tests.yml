@@ -1,10 +1,14 @@
 name: "Integration - Slow Tests"
 
+# WARNING: Make sure not to put any secrets in job-wide env vars
+# if they're available in the public repo! They could end up in
+# a public GitHub Actions cache.
 env:
   ANDROID_NDK_VERSION: 28.0.13004108
+  LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS: true
+  # These secrets are not defined in the public repo, so they won't accidentally get cached.
   LIBSIGNAL_TESTING_CDSI_ENCLAVE_SECRET: ${{secrets.CDSI_ENCLAVE_SECRET}}
   LIBSIGNAL_TESTING_PROXY_SERVER: ${{secrets.LIBSIGNAL_TESTING_PROXY_SERVER}}
-  LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS: true
   LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET: ${{secrets.LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET}}
 
 on:
