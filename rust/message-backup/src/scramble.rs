@@ -369,6 +369,8 @@ impl Visit<Scrambler> for proto::FilePointer {
             caption,
             blurHash,
             locatorInfo,
+            audioWaveform,
+            audioDurationSeconds: _,
             special_fields: _,
         } = self;
 
@@ -377,6 +379,7 @@ impl Visit<Scrambler> for proto::FilePointer {
         fileName.randomize(&mut visitor.rng);
         caption.randomize(&mut visitor.rng);
         blurHash.randomize(&mut visitor.rng);
+        audioWaveform.randomize(&mut visitor.rng);
 
         if let Some(loc) = locatorInfo.as_mut() {
             loc.accept(visitor);
