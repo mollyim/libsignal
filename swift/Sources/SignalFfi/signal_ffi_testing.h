@@ -982,6 +982,44 @@ typedef struct {
 } SignalGetMessageBackupInfoOutFfiResult;
 static_assert_64bit(sizeof(SignalGetMessageBackupInfoOutFfiResult) == 32);
 static_assert_64bit(alignof(SignalGetMessageBackupInfoOutFfiResult) == 8);
+typedef struct {
+  SignalType_FixedArray473_uint8_t profile_key_request_context;
+  SignalServerPublicParamsSerializedFfiResult server_params;
+} SignalGetProfileKeyCredentialArgsFfiResult;
+static_assert_64bit(offsetof(SignalGetProfileKeyCredentialArgsFfiResult, profile_key_request_context) == 0);
+static_assert_64bit(offsetof(SignalGetProfileKeyCredentialArgsFfiResult, server_params) == 480);
+static_assert_64bit(sizeof(SignalGetProfileKeyCredentialArgsFfiResult) == 496);
+static_assert_64bit(alignof(SignalGetProfileKeyCredentialArgsFfiResult) == 8);
+typedef enum {
+  SignalProfileKeyCredentialRequestErrorFfiResultAuthFailed,
+  SignalProfileKeyCredentialRequestErrorFfiResultProfileNotFound,
+} SignalProfileKeyCredentialRequestErrorFfiResult;
+static_assert_64bit(sizeof(SignalProfileKeyCredentialRequestErrorFfiResult) == 4);
+static_assert_64bit(alignof(SignalProfileKeyCredentialRequestErrorFfiResult) == 4);
+typedef enum {
+  SignalGetProfileKeyCredentialOutFfiResultSuccess,
+  SignalGetProfileKeyCredentialOutFfiResultUnexpectedError,
+  SignalGetProfileKeyCredentialOutFfiResultExplicitError,
+} SignalGetProfileKeyCredentialOutFfiResult_Tag;
+typedef struct {
+  SignalType_FixedArray153_uint8_t _0;
+} SignalGetProfileKeyCredentialOutFfiResultSignalSuccess_Body;
+typedef struct {
+  const int8_t* contains;
+} SignalGetProfileKeyCredentialOutFfiResultSignalUnexpectedError_Body;
+typedef struct {
+  SignalProfileKeyCredentialRequestErrorFfiResult _0;
+} SignalGetProfileKeyCredentialOutFfiResultSignalExplicitError_Body;
+typedef struct {
+  SignalGetProfileKeyCredentialOutFfiResult_Tag tag;
+  union {
+    SignalGetProfileKeyCredentialOutFfiResultSignalSuccess_Body success;
+    SignalGetProfileKeyCredentialOutFfiResultSignalUnexpectedError_Body unexpected_error;
+    SignalGetProfileKeyCredentialOutFfiResultSignalExplicitError_Body explicit_error;
+  };
+} SignalGetProfileKeyCredentialOutFfiResult;
+static_assert_64bit(sizeof(SignalGetProfileKeyCredentialOutFfiResult) == 168);
+static_assert_64bit(alignof(SignalGetProfileKeyCredentialOutFfiResult) == 8);
 typedef enum {
   SignalGetStickerUploadFormsOutFfiResultSuccess,
   SignalGetStickerUploadFormsOutFfiResultInvalid,
@@ -2100,6 +2138,9 @@ SignalFfiError* signal_testing_get_message_backup_info_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_get_pre_key_count_tests(
+  SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
+);
+SignalFfiError* signal_testing_get_profile_key_credential_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_get_sticker_upload_form_tests(

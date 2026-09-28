@@ -2537,6 +2537,21 @@ where
         format!("Serialized<{name}>")
     }
 }
+#[cfg(feature = "metadata")]
+impl<T> NiceResultConverter for Serialized<T>
+where
+    T: FixedLengthBincodeSerializable,
+{
+    fn register_ts_result_converter(_ctx: &mut TsMetadataContext) -> TsReturnConverter {
+        TsReturnConverter {
+            // If we ever want to use FixedLengthBincodeSerializable for non-zkgroup types,
+            // we can add a module name as a trait requirement.
+            nice_type: format!("zkgroup.{}", T::name()),
+            ffi_type: "Uint8Array<ArrayBuffer>".to_owned(),
+            converter_function: format!("(x => new zkgroup.{}(x))", T::name()),
+        }
+    }
+}
 
 #[cfg(feature = "metadata")]
 impl NiceResultConverter for crate::net::chat::CopyBackupMediaStream {

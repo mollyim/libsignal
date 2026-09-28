@@ -39,7 +39,9 @@ use libsignal_net_chat::api::messages::{
     SingleOutboundUnsealedMessage, UnauthenticatedChatApi as _, UnsealedSendFailure,
     UploadTooLarge, UserBasedSendAuthorization,
 };
-use libsignal_net_chat::api::profiles::UnauthenticatedAccountExistenceApi;
+use libsignal_net_chat::api::profiles::{
+    ProfileKeyCredentialRequestError, UnauthenticatedAccountExistenceApi,
+};
 use libsignal_net_chat::api::purchase::PaymentProvider;
 use libsignal_net_chat::api::usernames::UnauthenticatedChatApi as _;
 use libsignal_net_chat::api::{RequestError, UploadForm, UserBasedAuthorization};
@@ -1442,6 +1444,24 @@ async fn AuthenticatedChatConnection_finish_mfa_verification(
         .await
         .finish_mfa_verification(credential.into())
         .await
+}
+
+#[bridge_io(TokioAsyncContext, nice = true)]
+async fn UnauthenticatedChatConnection_get_profile_key_credential(
+    chat: BridgeHandleRef<'_, UnauthenticatedChatConnection>,
+    profile_key_request_context: Serialized<
+        ::zkgroup::profiles::ProfileKeyCredentialRequestContext,
+    >,
+    server_params: BridgeHandleRef<'_, ::zkgroup::ServerPublicParams>,
+) -> Result<
+    Serialized<::zkgroup::profiles::ExpiringProfileKeyCredential>,
+    RequestError<ProfileKeyCredentialRequestError>,
+> {
+    chat.require_grpc()
+        .await
+        .get_profile_key_credential(profile_key_request_context.into_inner(), &server_params)
+        .await
+        .map(Into::into)
 }
 
 #[cfg(test)]

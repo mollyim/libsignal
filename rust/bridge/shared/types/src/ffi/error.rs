@@ -166,6 +166,8 @@ pub enum SignalErrorCode {
     MfaNotVerified = 236,
     MfaKeyNotFound = 237,
     WebAuthnRegistrationUnsuccessful = 238,
+
+    ProfileNotFound = 239,
 }
 
 pub trait UpcastAsAny {
@@ -1466,6 +1468,16 @@ impl IntoFfiError for libsignal_net_chat::grpc::accounts::MfaKeyNotFound {
 impl IntoFfiError for libsignal_net_chat::grpc::accounts::MfaVerificationFailed {
     fn into_ffi_error(self) -> impl Into<SignalFfiError> {
         SimpleError::new(SignalErrorCode::MfaNotVerified, self.to_string())
+    }
+}
+
+impl IntoFfiError for libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError {
+    fn into_ffi_error(self) -> impl Into<SignalFfiError> {
+        let code = match self {
+            Self::AuthFailed => SignalErrorCode::RequestUnauthorized,
+            Self::ProfileNotFound => SignalErrorCode::ProfileNotFound,
+        };
+        SimpleError::new(code, self.to_string())
     }
 }
 

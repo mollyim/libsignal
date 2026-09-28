@@ -2085,3 +2085,14 @@ impl<E: JniError> JniError for crate::support::RequestOrArgumentError<E> {
         }
     }
 }
+
+impl MessageOnlyExceptionJniError
+    for libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError
+{
+    fn exception_class(&self) -> ClassName<'static> {
+        match self {
+            Self::AuthFailed => ClassName("org.signal.libsignal.net.RequestUnauthorizedException"),
+            Self::ProfileNotFound => ClassName("org.signal.libsignal.net.ProfileNotFoundException"),
+        }
+    }
+}

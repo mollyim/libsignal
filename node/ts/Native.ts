@@ -530,6 +530,25 @@ export type ReturnFfiGetMessageBackupInfoOut =
       __type: 2;
     };
 
+export type ReturnFfiGetProfileKeyCredentialArgs = {
+  profile_key_request_context: Uint8Array<ArrayBuffer>;
+  server_params: ReturnFfiServerPublicParamsSerialized;
+};
+
+export type ReturnFfiGetProfileKeyCredentialOut =
+  | {
+      __type: 0;
+      _0: Uint8Array<ArrayBuffer>;
+    }
+  | {
+      __type: 1;
+      contains: string;
+    }
+  | {
+      __type: 2;
+      _0: ReturnFfiProfileKeyCredentialRequestError;
+    };
+
 export type ReturnFfiGetStickerUploadFormsOut =
   | {
       __type: 0;
@@ -703,6 +722,14 @@ export type ReturnFfiPaymentProvider =
     }
   | {
       __type: 3;
+    };
+
+export type ReturnFfiProfileKeyCredentialRequestError =
+  | {
+      __type: 0;
+    }
+  | {
+      __type: 1;
     };
 
 export type ReturnFfiReceiptCredentialError =
@@ -3349,6 +3376,12 @@ type NativeFunctions = {
   TESTING_GetPreKeyCountTests: () => Array<
     GrpcTestCaseFfi<void, ReturnFfiBridgePreKeyCounts>
   >;
+  TESTING_GetProfileKeyCredentialTests: () => Array<
+    GrpcTestCaseFfi<
+      ReturnFfiGetProfileKeyCredentialArgs,
+      ReturnFfiGetProfileKeyCredentialOut
+    >
+  >;
   TESTING_GetStickerUploadFormTests: () => Array<
     GrpcTestCaseFfi<number, ReturnFfiGetStickerUploadFormsOut>
   >;
@@ -3852,6 +3885,12 @@ type NativeFunctions = {
     target: Uint8Array<ArrayBuffer>,
     device: number
   ) => CancellablePromise<PreKeysResponse>;
+  UnauthenticatedChatConnection_get_profile_key_credential: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<UnauthenticatedChatConnection>,
+    profile_key_request_context: Serialized<ProfileKeyCredentialRequestContext>,
+    server_params: Wrapper<ServerPublicParams>
+  ) => CancellablePromise<Serialized<ExpiringProfileKeyCredential>>;
   UnauthenticatedChatConnection_info: (
     chat: Wrapper<UnauthenticatedChatConnection>
   ) => ChatConnectionInfo;
@@ -4597,6 +4636,7 @@ const {
   TESTING_GetMediaBackupInfoTests,
   TESTING_GetMessageBackupInfoTests,
   TESTING_GetPreKeyCountTests,
+  TESTING_GetProfileKeyCredentialTests,
   TESTING_GetStickerUploadFormTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
@@ -4762,6 +4802,7 @@ const {
   UnauthenticatedChatConnection_get_pre_keys_access_key_auth,
   UnauthenticatedChatConnection_get_pre_keys_group_auth,
   UnauthenticatedChatConnection_get_pre_keys_unrestricted_auth,
+  UnauthenticatedChatConnection_get_profile_key_credential,
   UnauthenticatedChatConnection_info,
   UnauthenticatedChatConnection_init_listener,
   UnauthenticatedChatConnection_look_up_username_hash,
@@ -5406,6 +5447,7 @@ export {
   TESTING_GetMediaBackupInfoTests,
   TESTING_GetMessageBackupInfoTests,
   TESTING_GetPreKeyCountTests,
+  TESTING_GetProfileKeyCredentialTests,
   TESTING_GetStickerUploadFormTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
@@ -5571,6 +5613,7 @@ export {
   UnauthenticatedChatConnection_get_pre_keys_access_key_auth,
   UnauthenticatedChatConnection_get_pre_keys_group_auth,
   UnauthenticatedChatConnection_get_pre_keys_unrestricted_auth,
+  UnauthenticatedChatConnection_get_profile_key_credential,
   UnauthenticatedChatConnection_info,
   UnauthenticatedChatConnection_init_listener,
   UnauthenticatedChatConnection_look_up_username_hash,

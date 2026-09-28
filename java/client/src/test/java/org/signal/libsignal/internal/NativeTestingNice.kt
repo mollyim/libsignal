@@ -175,6 +175,25 @@ public sealed class GetMessageBackupInfoOut {
   public data object MissingResponse : GetMessageBackupInfoOut()
 }
 
+public data class GetProfileKeyCredentialArgs(
+  public val profileKeyRequestContext: org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext,
+  public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
+)
+
+public sealed class GetProfileKeyCredentialOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.zkgroup.profiles.ExpiringProfileKeyCredential,
+  ) : GetProfileKeyCredentialOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : GetProfileKeyCredentialOut()
+
+  public data class ExplicitError(
+    public val _0: org.signal.libsignal.internal.ProfileKeyCredentialRequestError,
+  ) : GetProfileKeyCredentialOut()
+}
+
 public sealed class GetStickerUploadFormsOut {
   public data class Success(
     public val _0: org.signal.libsignal.net.GetStickerUploadFormsResponse,
@@ -311,6 +330,12 @@ public data class MyTestStruct(
   public val myNumericField: Int,
   public val myStringField: String,
 )
+
+public sealed class ProfileKeyCredentialRequestError {
+  public data object AuthFailed : ProfileKeyCredentialRequestError()
+
+  public data object ProfileNotFound : ProfileKeyCredentialRequestError()
+}
 
 public sealed class ReceiptCredentialError {
   public data object PaymentStillProcessing : ReceiptCredentialError()
@@ -1050,6 +1075,60 @@ public object GetMessageBackupInfoOut_MissingResponse_ReturnConverter {
   internal fun fromNative(): Any? = GetMessageBackupInfoOut.MissingResponse
 }
 
+public object GetProfileKeyCredentialArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    profile_key_request_context: Any?,
+    server_params: Any?,
+  ): Any? =
+    GetProfileKeyCredentialArgs(
+      profileKeyRequestContext =
+        org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext(
+          profile_key_request_context as ByteArray,
+        ),
+      serverParams =
+        downcastFromObject<org.signal.libsignal.internal.ServerPublicParamsSerialized>(
+          server_params as Object,
+        ),
+    )
+}
+
+public object GetProfileKeyCredentialOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetProfileKeyCredentialOut.Success(
+      _0 =
+        org.signal.libsignal.zkgroup.profiles
+          .ExpiringProfileKeyCredential(_0 as ByteArray),
+    )
+}
+
+public object GetProfileKeyCredentialOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    GetProfileKeyCredentialOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
+public object GetProfileKeyCredentialOut_ExplicitError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetProfileKeyCredentialOut.ExplicitError(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.ProfileKeyCredentialRequestError>(_0 as Object),
+    )
+}
+
 public object GetStickerUploadFormsOut_Success_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -1377,6 +1456,20 @@ public object MyTestStruct_ReturnConverter {
       myStringField =
         identity(my_string_field as String),
     )
+}
+
+public object ProfileKeyCredentialRequestError_AuthFailed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = ProfileKeyCredentialRequestError.AuthFailed
+}
+
+public object ProfileKeyCredentialRequestError_ProfileNotFound_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = ProfileKeyCredentialRequestError.ProfileNotFound
 }
 
 public object ReceiptCredentialError_PaymentStillProcessing_ReturnConverter {
@@ -2313,6 +2406,16 @@ public object NativeTestingNice {
       .resultConverter<Void?, Object, Void?, org.signal.libsignal.net.PreKeyCounts>({
         identity(it)
       }, { downcastFromObject<org.signal.libsignal.net.PreKeyCounts>(it) })(ffiOut)
+  }
+
+  public fun TESTING_GetProfileKeyCredentialTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.GetProfileKeyCredentialArgs, org.signal.libsignal.internal.GetProfileKeyCredentialOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetProfileKeyCredentialTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.GetProfileKeyCredentialArgs, org.signal.libsignal.internal.GetProfileKeyCredentialOut>({
+        downcastFromObject<org.signal.libsignal.internal.GetProfileKeyCredentialArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetProfileKeyCredentialOut>(it) })(ffiOut)
   }
 
   public fun TESTING_GetStickerUploadFormTests(): List<org.signal.libsignal.net.GrpcTestCase<Int, org.signal.libsignal.internal.GetStickerUploadFormsOut>> {

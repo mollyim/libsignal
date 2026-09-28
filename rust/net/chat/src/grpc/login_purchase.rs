@@ -235,10 +235,7 @@ pub mod test_cases {
 
     use super::*;
     use crate::grpc::GrpcTestCase;
-
-    fn day_align(x: u64) -> u64 {
-        (x / SECONDS_PER_DAY) * SECONDS_PER_DAY
-    }
+    use crate::grpc::test_case_util::day_align;
 
     #[derive(Clone)]
     pub struct CreateLoginReceiptCredentialArgs {

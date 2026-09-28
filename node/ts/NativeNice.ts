@@ -62,6 +62,8 @@ import type {
   ReturnFfiGetDevicesOut,
   ReturnFfiGetMediaBackupInfoOut,
   ReturnFfiGetMessageBackupInfoOut,
+  ReturnFfiGetProfileKeyCredentialArgs,
+  ReturnFfiGetProfileKeyCredentialOut,
   ReturnFfiGetStickerUploadFormsOut,
   ReturnFfiGetStickerUploadFormsResponse,
   ReturnFfiGetSvrBCredentialsOut,
@@ -81,6 +83,7 @@ import type {
   ReturnFfiMyTestPoint,
   ReturnFfiMyTestStruct,
   ReturnFfiPaymentProvider,
+  ReturnFfiProfileKeyCredentialRequestError,
   ReturnFfiReceiptCredentialError,
   ReturnFfiRedeemBackupReceiptOut,
   ReturnFfiRemoveDeviceArgs,
@@ -405,6 +408,22 @@ export type GetMessageBackupInfoOut =
   | 'credentialRejected'
   | 'missingResponse';
 
+export type GetProfileKeyCredentialArgs = {
+  profileKeyRequestContext: zkgroup.ProfileKeyCredentialRequestContext;
+  serverParams: ServerPublicParamsSerialized;
+};
+
+export type GetProfileKeyCredentialOut =
+  | {
+      success: zkgroup.ExpiringProfileKeyCredential;
+    }
+  | {
+      unexpectedError: string;
+    }
+  | {
+      explicitError: ProfileKeyCredentialRequestError;
+    };
+
 export type GetStickerUploadFormsOut =
   | {
       success: GetStickerUploadFormsResponse;
@@ -533,6 +552,8 @@ export type PaymentProvider =
   | 'appleAppStore'
   | 'stripe'
   | 'braintree';
+
+export type ProfileKeyCredentialRequestError = 'authFailed' | 'profileNotFound';
 
 export type ReceiptCredentialError =
   | 'paymentStillProcessing'
@@ -1308,6 +1329,48 @@ export function returnConverterGetMessageBackupInfoOut(
   }
 }
 
+export function returnConverterGetProfileKeyCredentialArgs(
+  ffiInput: Native.ReturnFfiGetProfileKeyCredentialArgs
+): GetProfileKeyCredentialArgs {
+  return {
+    profileKeyRequestContext: ((x) =>
+      new zkgroup.ProfileKeyCredentialRequestContext(x))(
+      ffiInput.profile_key_request_context
+    ),
+    serverParams: returnConverterServerPublicParamsSerialized(
+      ffiInput.server_params
+    ),
+  };
+}
+
+export function returnConverterGetProfileKeyCredentialOut(
+  ffiInput: Native.ReturnFfiGetProfileKeyCredentialOut
+): GetProfileKeyCredentialOut {
+  switch (ffiInput.__type) {
+    case 0:
+      return {
+        success: ((x) => new zkgroup.ExpiringProfileKeyCredential(x))(
+          ffiInput._0
+        ),
+      };
+    case 1:
+      return {
+        unexpectedError: identity(ffiInput.contains),
+      };
+    case 2:
+      return {
+        explicitError: returnConverterProfileKeyCredentialRequestError(
+          ffiInput._0
+        ),
+      };
+    default:
+      ffiInput satisfies never;
+      throw new Error(
+        'Unknown FFI return enum type for GetProfileKeyCredentialOut'
+      );
+  }
+}
+
 export function returnConverterGetStickerUploadFormsOut(
   ffiInput: Native.ReturnFfiGetStickerUploadFormsOut
 ): GetStickerUploadFormsOut {
@@ -1592,6 +1655,23 @@ export function returnConverterPaymentProvider(
     default:
       ffiInput satisfies never;
       throw new Error('Unknown FFI return enum type for PaymentProvider');
+  }
+}
+
+export function returnConverterProfileKeyCredentialRequestError(
+  ffiInput: Native.ReturnFfiProfileKeyCredentialRequestError
+): ProfileKeyCredentialRequestError {
+  switch (ffiInput.__type) {
+    case 0:
+      return 'authFailed';
+    case 1:
+      return 'profileNotFound';
+
+    default:
+      ffiInput satisfies never;
+      throw new Error(
+        'Unknown FFI return enum type for ProfileKeyCredentialRequestError'
+      );
   }
 }
 
@@ -3301,6 +3381,15 @@ export function TESTING_GetPreKeyCountTests(): Array<
   )(Native.TESTING_GetPreKeyCountTests());
 }
 
+export function TESTING_GetProfileKeyCredentialTests(): Array<
+  GrpcTestCase<GetProfileKeyCredentialArgs, GetProfileKeyCredentialOut>
+> {
+  return grpcTestCaseConverter(
+    returnConverterGetProfileKeyCredentialArgs,
+    returnConverterGetProfileKeyCredentialOut
+  )(Native.TESTING_GetProfileKeyCredentialTests());
+}
+
 export function TESTING_GetStickerUploadFormTests(): Array<
   GrpcTestCase<number, GetStickerUploadFormsOut>
 > {
@@ -4763,6 +4852,31 @@ export async function UnauthenticatedChatConnection_create_login_receipt_credent
         ),
         identity(server_params),
         identity(purchase_time)
+      )
+    )
+  );
+}
+export async function UnauthenticatedChatConnection_get_profile_key_credential({
+  asyncContext,
+  abortSignal,
+  chat: chat,
+  profileKeyRequestContext: profile_key_request_context,
+  serverParams: server_params,
+}: {
+  asyncContext: TokioAsyncContext;
+  abortSignal?: AbortSignal;
+  chat: Native.Wrapper<Native.UnauthenticatedChatConnection>;
+  profileKeyRequestContext: zkgroup.ProfileKeyCredentialRequestContext;
+  serverParams: Native.Wrapper<Native.ServerPublicParams>;
+}): Promise<zkgroup.ExpiringProfileKeyCredential> {
+  return ((x) => new zkgroup.ExpiringProfileKeyCredential(x))(
+    await asyncContext.makeCancellable(
+      abortSignal,
+      Native.UnauthenticatedChatConnection_get_profile_key_credential(
+        asyncContext,
+        identity(chat),
+        ByteArray.prototype.getContents.call(profile_key_request_context),
+        identity(server_params)
       )
     )
   );

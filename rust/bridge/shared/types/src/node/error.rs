@@ -1237,6 +1237,15 @@ impl SimpleNodeError for libsignal_net_chat::grpc::accounts::MfaVerificationFail
     }
 }
 
+impl SimpleNodeError for libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError {
+    fn js_error_name(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::AuthFailed => "RequestUnauthorized",
+            Self::ProfileNotFound => "ProfileNotFound",
+        })
+    }
+}
+
 impl<E> SignalNodeError for crate::support::RequestOrArgumentError<E>
 where
     libsignal_net_chat::api::RequestError<E>: SignalNodeError,

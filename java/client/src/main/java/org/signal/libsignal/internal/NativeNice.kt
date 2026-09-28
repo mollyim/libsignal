@@ -2484,6 +2484,33 @@ public object NativeNice {
       }
   }
 
+  public fun UnauthenticatedChatConnection_get_profile_key_credential(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.UnauthenticatedChatConnection,
+    profileKeyRequestContext: org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext,
+    serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
+  ): CompletableFuture<org.signal.libsignal.zkgroup.profiles.ExpiringProfileKeyCredential> {
+    val ffi_chat = identity(chat)
+    val ffi_profile_key_request_context =
+      (org.signal.libsignal.zkgroup.internal.ByteArray::getInternalContentsForJNI)(profileKeyRequestContext)
+    val ffi_server_params = identity(serverParams)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.UnauthenticatedChatConnection_get_profile_key_credential(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_profile_key_request_context,
+          ffi_server_params,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        org.signal.libsignal.zkgroup.profiles
+          .ExpiringProfileKeyCredential(it)
+      }
+  }
+
   public fun UnauthenticatedChatConnection_submit_call_quality_survey(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.UnauthenticatedChatConnection,

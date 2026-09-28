@@ -1122,6 +1122,32 @@ mod remote_derives {
         Success,
         FailedToVerify,
     }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::profiles::test_cases::GetProfileKeyCredentialArgs)]
+    #[bridge(arg = false)]
+    pub struct GetProfileKeyCredentialArgs {
+        profile_key_request_context:
+            Serialized<::zkgroup::profiles::ProfileKeyCredentialRequestContext>,
+        server_params: ServerPublicParamsSerialized,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError)]
+    #[bridge(arg = false, swift_equatable = true)]
+    pub enum ProfileKeyCredentialRequestError {
+        AuthFailed,
+        ProfileNotFound,
+    }
+    #[allow(clippy::large_enum_variant)]
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::profiles::test_cases::GetProfileKeyCredentialOut)]
+    #[bridge(arg = false)]
+    pub enum GetProfileKeyCredentialOut {
+        Success(Serialized<::zkgroup::profiles::ExpiringProfileKeyCredential>),
+        UnexpectedError { contains: String },
+        ExplicitError(ProfileKeyCredentialRequestError),
+    }
 }
 
 #[bridge_fn(nice = true)]
@@ -1414,4 +1440,12 @@ fn TESTING_StartMfaVerificationTests() -> GrpcTestCases<(), remote_derives::Star
 fn TESTING_FinishMfaVerificationTests()
 -> GrpcTestCases<BridgeMfaVerificationCredential, remote_derives::FinishMfaVerificationOut> {
     libsignal_net_chat::grpc::accounts::test_cases::finish_mfa_verification_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetProfileKeyCredentialTests() -> GrpcTestCases<
+    remote_derives::GetProfileKeyCredentialArgs,
+    remote_derives::GetProfileKeyCredentialOut,
+> {
+    libsignal_net_chat::grpc::profiles::test_cases::get_profile_key_credential_test_cases().into()
 }

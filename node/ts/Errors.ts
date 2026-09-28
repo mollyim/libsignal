@@ -119,6 +119,8 @@ export enum ErrorCode {
   OneTimePasswordNotVerified = MfaNotVerified,
   MfaKeyNotFound,
   WebAuthnRegistrationUnsuccessful,
+
+  ProfileNotFound,
 }
 
 /** Called out as a separate type so it's not confused with a normal ServiceIdBinary. */
@@ -623,6 +625,10 @@ export type WebAuthnRegistrationUnsuccessful = LibSignalErrorCommon & {
   code: ErrorCode.WebAuthnRegistrationUnsuccessful;
 };
 
+export type ProfileNotFound = LibSignalErrorCommon & {
+  code: ErrorCode.ProfileNotFound;
+};
+
 export type LibSignalError =
   | GenericError
   | DuplicatedMessageError
@@ -706,4 +712,5 @@ export type LibSignalError =
   | TooManyMfaKeys
   | MfaNotVerified
   | MfaKeyNotFound
-  | WebAuthnRegistrationUnsuccessful;
+  | WebAuthnRegistrationUnsuccessful
+  | ProfileNotFound;

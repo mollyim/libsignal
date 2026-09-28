@@ -16,7 +16,7 @@ pub mod keytrans;
 pub mod login_purchase;
 mod messages;
 pub mod payments;
-mod profiles;
+pub mod profiles;
 pub mod stickers;
 pub mod usernames;
 
@@ -762,6 +762,7 @@ pub mod test_case_util {
     use futures_util::FutureExt as _;
     use http_body_util::BodyExt as _;
     use libsignal_net::chat::fake::BodyWithTrailers;
+    use zkgroup::SECONDS_PER_DAY;
 
     use super::*;
 
@@ -828,6 +829,10 @@ pub mod test_case_util {
             ),
         ]))
         .expect("valid")
+    }
+
+    pub(crate) fn day_align(x: u64) -> u64 {
+        (x / SECONDS_PER_DAY) * SECONDS_PER_DAY
     }
 }
 

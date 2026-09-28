@@ -46,6 +46,9 @@ pub mod proto {
                 pub mod payments {
                     tonic::include_proto!("org.signal.chat.payments");
                 }
+                pub mod profile {
+                    tonic::include_proto!("org.signal.chat.profile");
+                }
                 pub mod purchase {
                     tonic::include_proto!("org.signal.chat.purchase");
                 }

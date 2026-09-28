@@ -2732,6 +2732,24 @@ where
         result.convert_into(env)
     }
 }
+#[cfg(feature = "metadata")]
+impl<T> NiceResultConverter for Serialized<T>
+where
+    T: FixedLengthBincodeSerializable,
+{
+    fn register_kt_result_converter(_ctx: &mut KtMetadataContext) -> KtReturnConverter {
+        assert!(
+            !T::JNI_CLASS.is_empty(),
+            "need to specify JNI_CLASS for {} to use it with nice bridging",
+            std::any::type_name::<T>()
+        );
+        KtReturnConverter {
+            nice_type: T::JNI_CLASS.to_owned(),
+            ffi_type: "ByteArray".to_owned(),
+            converter_function: T::JNI_CLASS.to_owned(),
+        }
+    }
+}
 
 impl<'a> ResultTypeInfo<'a> for libsignal_net::cdsi::LookupResponse {
     type ResultType = JObject<'a>;

@@ -290,7 +290,9 @@ internal struct ByteArrayConverter<T: ByteArray>: NiceArgConverter, NiceReturnCo
     }
 }
 
-internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArrayHelper>: NiceArgConverter {
+internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArrayHelper>: NiceArgConverter,
+    NiceReturnConverter
+{
     typealias NiceArg = T
     typealias FfiArg = UnsafePointer<Helper.Ffi>?
     typealias KeepAlive = NSData
@@ -303,6 +305,16 @@ internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArra
         _ thunk: (FfiArg) throws -> Result
     ) rethrows -> Result {
         try FixedByteArrayConverter<Helper>.convertArgBorrowed(arg.serialize(), thunk)
+    }
+
+    typealias FfiReturn = Helper.Ffi
+    typealias NiceReturn = T
+
+    static func convertReturn(consuming value: Helper.Ffi) throws -> T {
+        try T(contents: FixedByteArrayConverter<Helper>.convertReturn(consuming: value))
+    }
+    static func emptyFfiReturn() -> Helper.Ffi {
+        FixedByteArrayConverter<Helper>.emptyFfiReturn()
     }
 }
 

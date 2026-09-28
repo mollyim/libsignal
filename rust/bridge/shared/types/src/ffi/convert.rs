@@ -1718,6 +1718,23 @@ where
         Ok(result.as_slice().try_into().expect("wrong serialized size"))
     }
 }
+#[cfg(feature = "metadata")]
+impl<T> NiceResultConverter for Serialized<T>
+where
+    T: FixedLengthBincodeSerializable,
+{
+    fn register_swift_result_converter(ctx: &mut SwiftMetadataContext) -> SwiftReturnConverter {
+        ctx.fixed_byte_array_lengths.insert(T::Array::LEN);
+        let name = T::name();
+        SwiftReturnConverter {
+            converter_type: format!(
+                "FixedLengthSerializedConverter<{name}, {}>",
+                names::fixed_byte_array_helper(T::Array::LEN)
+            ),
+            nice_type: name,
+        }
+    }
+}
 
 impl ResultTypeInfo for DeviceId {
     type ResultType = u8;
