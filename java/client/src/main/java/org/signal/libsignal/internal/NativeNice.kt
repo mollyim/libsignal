@@ -1634,6 +1634,31 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_report_message(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    source: org.signal.libsignal.protocol.ServiceId.Aci,
+    messageGuid: java.util.UUID,
+    reportSpamToken: ByteArray,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_source = (org.signal.libsignal.protocol.ServiceId.Aci::toServiceIdFixedWidthBinary)(source)
+    val ffi_message_guid = identity(messageGuid)
+    val ffi_report_spam_token = identity(reportSpamToken)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_report_message(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_source,
+          ffi_message_guid,
+          ffi_report_spam_token,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
   public fun AuthenticatedChatConnection_reserve_username_hash(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,

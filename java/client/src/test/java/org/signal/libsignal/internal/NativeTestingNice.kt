@@ -375,6 +375,12 @@ public sealed class RemoveMfaKeyOut {
   public data object Success : RemoveMfaKeyOut()
 }
 
+public data class ReportMessageArgs(
+  public val source: org.signal.libsignal.protocol.ServiceId.Aci,
+  public val messageGuid: java.util.UUID,
+  public val reportSpamToken: ByteArray,
+)
+
 public data class ReserveUsernameHashArgs(
   public val usernames: List<ByteArray>,
 )
@@ -1570,6 +1576,26 @@ public object RemoveMfaKeyOut_Success_ReturnConverter {
   internal fun fromNative(): Any? = RemoveMfaKeyOut.Success
 }
 
+public object ReportMessageArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    source: Any?,
+    message_guid: Any?,
+    report_spam_token: Any?,
+  ): Any? =
+    ReportMessageArgs(
+      source =
+        org.signal.libsignal.protocol.ServiceId.Aci
+          .parseFromFixedWidthBinary(source as ByteArray),
+      messageGuid =
+        identity(message_guid as java.util.UUID),
+      reportSpamToken =
+        identity(report_spam_token as ByteArray),
+    )
+}
+
 public object ReserveUsernameHashArgs_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -2662,6 +2688,16 @@ public object NativeTestingNice {
       .resultConverter<Object, Object, org.signal.libsignal.internal.RemoveMfaKeyArgs, org.signal.libsignal.internal.RemoveMfaKeyOut>({
         downcastFromObject<org.signal.libsignal.internal.RemoveMfaKeyArgs>(it)
       }, { downcastFromObject<org.signal.libsignal.internal.RemoveMfaKeyOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_ReportMessageTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ReportMessageArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_ReportMessageTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.ReportMessageArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.ReportMessageArgs>(it)
+      }, { identity(it) })(ffiOut)
   }
 
   public fun TESTING_ReserveUsernameHashTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ReserveUsernameHashArgs, org.signal.libsignal.internal.ReserveUsernameHashOut>> {

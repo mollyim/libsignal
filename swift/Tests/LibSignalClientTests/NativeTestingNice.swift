@@ -1133,6 +1133,13 @@ internal enum RemoveMfaKeyOut {
     case success
 }
 
+internal struct ReportMessageArgs {
+    var source: Aci
+    var messageGuid: UUID
+    var reportSpamToken: Data
+
+}
+
 internal struct ReserveUsernameHashArgs {
     var usernames: [Data]
 
@@ -2493,6 +2500,26 @@ internal enum DerivedReturnConverterRemoveMfaKeyOut: NiceReturnConverter {
         default:
             throw SignalError.internalError("Unexpected enum tag for RemoveMfaKeyOut: \(ffiTag)")
         }
+    }
+}
+
+internal enum DerivedReturnConverterReportMessageArgs: NiceReturnConverter {
+    typealias NiceReturn = ReportMessageArgs
+    typealias FfiReturn = SignalReportMessageArgsFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalReportMessageArgsFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let source = Result { try AciConverter.convertReturn(consuming: ffiValue.source) }
+        let message_guid = Result { try UuidNiceConverter.convertReturn(consuming: ffiValue.message_guid) }
+        let report_spam_token = Result { try DataConverter.convertReturn(consuming: ffiValue.report_spam_token) }
+
+        return ReportMessageArgs(
+            source: try source.get(),
+            messageGuid: try message_guid.get(),
+            reportSpamToken: try report_spam_token.get()
+        )
     }
 }
 
@@ -4416,6 +4443,19 @@ internal enum NativeTestingNice {
         return try GrpcTestCaseVecConverter<
             DerivedReturnConverterRemoveMfaKeyArgs, DerivedReturnConverterRemoveMfaKeyOut
         >.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func TESTING_ReportMessageTests() throws -> [GrpcTestCase<ReportMessageArgs, Void>] {
+        var rawOutput = GrpcTestCaseVecConverter<DerivedReturnConverterReportMessageArgs, VoidConverter>
+            .emptyFfiReturn()
+        try checkError(
+            SignalFfi.signal_testing_report_message_tests(
+                &rawOutput,
+            )
+        )
+        return try GrpcTestCaseVecConverter<DerivedReturnConverterReportMessageArgs, VoidConverter>.convertReturn(
+            consuming: rawOutput
+        )
 
     }
     internal static func TESTING_ReserveUsernameHashTests() throws -> [GrpcTestCase<

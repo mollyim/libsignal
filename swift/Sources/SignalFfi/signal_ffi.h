@@ -4018,6 +4018,14 @@ SignalFfiError* signal_authenticated_chat_connection_remove_mfa_key(
   SignalConstPointerAuthenticatedChatConnection chat,
   int32_t key_id
 );
+SignalFfiError* signal_authenticated_chat_connection_report_message(
+  SignalCPromisebool* promise,
+  SignalConstPointerTokioAsyncContext async_runtime,
+  SignalConstPointerAuthenticatedChatConnection chat,
+  const SignalType_FixedArray17_uint8_t* source,
+  SignalUuid message_guid,
+  SignalBorrowedBuffer report_spam_token
+);
 SignalFfiError* signal_authenticated_chat_connection_reserve_username_hash(
   SignalCPromisec_uchar32* promise,
   SignalConstPointerTokioAsyncContext async_runtime,

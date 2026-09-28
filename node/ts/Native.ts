@@ -777,6 +777,12 @@ export type ReturnFfiRemoveMfaKeyOut = {
   __type: 0;
 };
 
+export type ReturnFfiReportMessageArgs = {
+  source: Uint8Array<ArrayBuffer>;
+  message_guid: Uint8Array<ArrayBuffer>;
+  report_spam_token: Uint8Array<ArrayBuffer>;
+};
+
 export type ReturnFfiReserveUsernameHashArgs = {
   usernames: Array<Uint8Array<ArrayBuffer>>;
 };
@@ -1248,6 +1254,13 @@ type NativeFunctions = {
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>,
     key_id: number
+  ) => CancellablePromise<void>;
+  AuthenticatedChatConnection_report_message: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>,
+    source: Uint8Array<ArrayBuffer>,
+    message_guid: Uuid,
+    report_spam_token: Uint8Array<ArrayBuffer>
   ) => CancellablePromise<void>;
   AuthenticatedChatConnection_reserve_username_hash: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
@@ -3515,6 +3528,9 @@ type NativeFunctions = {
   TESTING_RemoveMfaKeyTests: () => Array<
     GrpcTestCaseFfi<ReturnFfiRemoveMfaKeyArgs, ReturnFfiRemoveMfaKeyOut>
   >;
+  TESTING_ReportMessageTests: () => Array<
+    GrpcTestCaseFfi<ReturnFfiReportMessageArgs, void>
+  >;
   TESTING_ReserveUsernameHashTests: () => Array<
     GrpcTestCaseFfi<
       ReturnFfiReserveUsernameHashArgs,
@@ -4070,6 +4086,7 @@ const {
   AuthenticatedChatConnection_redeem_backup_receipt,
   AuthenticatedChatConnection_remove_device,
   AuthenticatedChatConnection_remove_mfa_key,
+  AuthenticatedChatConnection_report_message,
   AuthenticatedChatConnection_reserve_username_hash,
   AuthenticatedChatConnection_send,
   AuthenticatedChatConnection_send_message,
@@ -4692,6 +4709,7 @@ const {
   TESTING_RegistrationSessionInfoConvert,
   TESTING_RemoveDeviceTests,
   TESTING_RemoveMfaKeyTests,
+  TESTING_ReportMessageTests,
   TESTING_ReserveUsernameHashTests,
   TESTING_ReturnIoError,
   TESTING_ReturnPair,
@@ -4881,6 +4899,7 @@ export {
   AuthenticatedChatConnection_redeem_backup_receipt,
   AuthenticatedChatConnection_remove_device,
   AuthenticatedChatConnection_remove_mfa_key,
+  AuthenticatedChatConnection_report_message,
   AuthenticatedChatConnection_reserve_username_hash,
   AuthenticatedChatConnection_send,
   AuthenticatedChatConnection_send_message,
@@ -5503,6 +5522,7 @@ export {
   TESTING_RegistrationSessionInfoConvert,
   TESTING_RemoveDeviceTests,
   TESTING_RemoveMfaKeyTests,
+  TESTING_ReportMessageTests,
   TESTING_ReserveUsernameHashTests,
   TESTING_ReturnIoError,
   TESTING_ReturnPair,

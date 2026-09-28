@@ -223,6 +223,33 @@ internal struct ServiceIdConverter: NiceArgConverter, NiceReturnConverter {
     typealias FfiReturn = ServiceIdStorage
 }
 
+internal struct AciConverter: NiceArgConverter, NiceReturnConverter {
+    static func emptyFfiReturn() -> ServiceIdStorage {
+        return ServiceIdConverter.emptyFfiReturn()
+    }
+
+    static func convertArgBorrowed<Result>(
+        _ arg: Aci,
+        _ thunk: (UnsafePointer<ServiceIdStorage>) throws -> Result
+    ) rethrows -> Result {
+        return try arg.withPointerToFixedWidthBinary(thunk)
+    }
+
+    static func convertArg(_ arg: Aci) -> (UnsafePointer<ServiceIdStorage>, NSData?) {
+        return ServiceIdConverter.convertArg(arg)
+    }
+
+    static func convertReturn(consuming value: ServiceIdStorage) throws -> Aci {
+        return try Aci.parseFrom(fixedWidthBinary: value)
+    }
+
+    typealias NiceArg = Aci
+    typealias FfiArg = UnsafePointer<ServiceIdStorage>
+    typealias KeepAlive = NSData
+    typealias NiceReturn = Aci
+    typealias FfiReturn = ServiceIdStorage
+}
+
 internal struct BridgeHandleRefConverter<Ptr: SignalMutPointer, T: NativeHandleOwner<Ptr>>: NiceArgConverter {
     typealias NiceArg = T
     typealias FfiArg = Ptr.ConstPointer

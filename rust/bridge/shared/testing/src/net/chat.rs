@@ -508,6 +508,7 @@ mod remote_derives {
         BridgeMediaBackupInfo, BridgeMessageBackupInfo, BridgeMfaMetadata, BridgePendingTotpKey,
         BridgeWebAuthnCreateParameters,
     };
+    use libsignal_core::Aci;
     use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
     use libsignal_net_chat::grpc::devices::{DeviceCapability, LinkedDevice};
     use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError as ReceiptCredentialErrorReal;
@@ -1148,6 +1149,14 @@ mod remote_derives {
         UnexpectedError { contains: String },
         ExplicitError(ProfileKeyCredentialRequestError),
     }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::messages::test_cases::ReportMessageArgs)]
+    pub(super) struct ReportMessageArgs {
+        source: Aci,
+        message_guid: Uuid,
+        report_spam_token: Vec<u8>,
+    }
 }
 
 #[bridge_fn(nice = true)]
@@ -1448,4 +1457,9 @@ fn TESTING_GetProfileKeyCredentialTests() -> GrpcTestCases<
     remote_derives::GetProfileKeyCredentialOut,
 > {
     libsignal_net_chat::grpc::profiles::test_cases::get_profile_key_credential_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_ReportMessageTests() -> GrpcTestCases<remote_derives::ReportMessageArgs, ()> {
+    libsignal_net_chat::grpc::messages::test_cases::report_message_test_cases().into()
 }

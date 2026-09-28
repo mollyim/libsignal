@@ -1153,6 +1153,16 @@ typedef enum {
 static_assert_64bit(sizeof(SignalRemoveMfaKeyOutFfiResult) == 4);
 static_assert_64bit(alignof(SignalRemoveMfaKeyOutFfiResult) == 4);
 typedef struct {
+  SignalType_FixedArray17_uint8_t source;
+  SignalUuid message_guid;
+  SignalOwnedBuffer report_spam_token;
+} SignalReportMessageArgsFfiResult;
+static_assert_64bit(offsetof(SignalReportMessageArgsFfiResult, source) == 0);
+static_assert_64bit(offsetof(SignalReportMessageArgsFfiResult, message_guid) == 17);
+static_assert_64bit(offsetof(SignalReportMessageArgsFfiResult, report_spam_token) == 40);
+static_assert_64bit(sizeof(SignalReportMessageArgsFfiResult) == 56);
+static_assert_64bit(alignof(SignalReportMessageArgsFfiResult) == 8);
+typedef struct {
   SignalOwnedBufferOfMaxAlignedc_uchar32 usernames;
 } SignalReserveUsernameHashArgsFfiResult;
 static_assert_64bit(offsetof(SignalReserveUsernameHashArgsFfiResult, usernames) == 0);
@@ -2341,6 +2351,9 @@ SignalFfiError* signal_testing_remove_device_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_remove_mfa_key_tests(
+  SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
+);
+SignalFfiError* signal_testing_report_message_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_reserve_username_hash_tests(

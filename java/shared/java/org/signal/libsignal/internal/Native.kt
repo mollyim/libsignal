@@ -433,6 +433,15 @@ internal object Native {
   ): CompletableFuture<Void?>
 
   @JvmStatic
+  public external fun AuthenticatedChatConnection_report_message(
+    asyncRuntime: ObjectHandle,
+    chat: SimpleOwner,
+    source: ByteArray,
+    messageGuid: UUID,
+    reportSpamToken: ByteArray,
+  ): CompletableFuture<Void?>
+
+  @JvmStatic
   public external fun AuthenticatedChatConnection_reserve_username_hash(
     asyncRuntime: ObjectHandle,
     chat: SimpleOwner,

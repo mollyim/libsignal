@@ -608,6 +608,9 @@ public object NativeTesting {
   public external fun TESTING_RemoveMfaKeyTests(): Array<Object>
 
   @JvmStatic
+  public external fun TESTING_ReportMessageTests(): Array<Object>
+
+  @JvmStatic
   public external fun TESTING_ReserveUsernameHashTests(): Array<Object>
 
   @JvmStatic

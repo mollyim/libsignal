@@ -26,7 +26,7 @@ use libsignal_bridge_types::net::{ConnectionManager, TokioAsyncContext};
 use libsignal_bridge_types::protocol::StrictPreKeyId;
 use libsignal_bridge_types::support::AsType;
 use libsignal_core::curve::{PrivateKey, PublicKey};
-use libsignal_core::{DeviceId, ServiceId, ServiceIdKind};
+use libsignal_core::{Aci, DeviceId, ServiceId, ServiceIdKind};
 use libsignal_net::chat::{self, ConnectError, LanguageList, Response as ChatResponse, SendError};
 use libsignal_net_chat::api;
 use libsignal_net_chat::api::backups::{
@@ -1462,6 +1462,19 @@ async fn UnauthenticatedChatConnection_get_profile_key_credential(
         .get_profile_key_credential(profile_key_request_context.into_inner(), &server_params)
         .await
         .map(Into::into)
+}
+
+#[bridge_io(TokioAsyncContext, nice = true)]
+async fn AuthenticatedChatConnection_report_message(
+    chat: BridgeHandleRef<'_, AuthenticatedChatConnection>,
+    source: Aci,
+    message_guid: Uuid,
+    report_spam_token: Vec<u8>,
+) -> Result<(), RequestError<Infallible>> {
+    chat.require_grpc()
+        .await
+        .report_message(source, message_guid, &report_spam_token)
+        .await
 }
 
 #[cfg(test)]

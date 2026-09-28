@@ -14,7 +14,7 @@ pub mod devices;
 pub mod keys;
 pub mod keytrans;
 pub mod login_purchase;
-mod messages;
+pub mod messages;
 pub mod payments;
 pub mod profiles;
 pub mod stickers;

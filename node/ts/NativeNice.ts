@@ -90,6 +90,7 @@ import type {
   ReturnFfiRemoveDeviceOut,
   ReturnFfiRemoveMfaKeyArgs,
   ReturnFfiRemoveMfaKeyOut,
+  ReturnFfiReportMessageArgs,
   ReturnFfiReserveUsernameHashArgs,
   ReturnFfiReserveUsernameHashOut,
   ReturnFfiS3UploadFormInternal,
@@ -114,7 +115,7 @@ import type {
   /* eslint-enable @typescript-eslint/no-unused-vars */
 } from './Native.js';
 
-import { ServiceId, ServiceIdKind } from './Address.js';
+import { Aci, ServiceId, ServiceIdKind } from './Address.js';
 import * as zkgroup from './zkgroup/index.js';
 import * as uuid from './uuid.js';
 import ByteArray from './zkgroup/internal/ByteArray.js';
@@ -580,6 +581,12 @@ export type RemoveMfaKeyArgs = {
 };
 
 export type RemoveMfaKeyOut = 'success';
+
+export type ReportMessageArgs = {
+  source: Aci;
+  messageGuid: uuid.Uuid;
+  reportSpamToken: Uint8Array<ArrayBuffer>;
+};
 
 export type ReserveUsernameHashArgs = {
   usernames: Array<Uint8Array<ArrayBuffer>>;
@@ -1762,6 +1769,16 @@ export function returnConverterRemoveMfaKeyOut(
   }
 }
 
+export function returnConverterReportMessageArgs(
+  ffiInput: Native.ReturnFfiReportMessageArgs
+): ReportMessageArgs {
+  return {
+    source: Aci.parseFromServiceIdFixedWidthBinary(ffiInput.source),
+    messageGuid: uuid.stringify(ffiInput.message_guid),
+    reportSpamToken: identity(ffiInput.report_spam_token),
+  };
+}
+
 export function returnConverterReserveUsernameHashArgs(
   ffiInput: Native.ReturnFfiReserveUsernameHashArgs
 ): ReserveUsernameHashArgs {
@@ -2719,6 +2736,34 @@ export async function AuthenticatedChatConnection_remove_mfa_key({
     )
   );
 }
+export async function AuthenticatedChatConnection_report_message({
+  asyncContext,
+  abortSignal,
+  chat: chat,
+  source: source,
+  messageGuid: message_guid,
+  reportSpamToken: report_spam_token,
+}: {
+  asyncContext: TokioAsyncContext;
+  abortSignal?: AbortSignal;
+  chat: Native.Wrapper<Native.AuthenticatedChatConnection>;
+  source: Aci;
+  messageGuid: uuid.Uuid;
+  reportSpamToken: Uint8Array<ArrayBuffer>;
+}): Promise<void> {
+  return identity(
+    await asyncContext.makeCancellable(
+      abortSignal,
+      Native.AuthenticatedChatConnection_report_message(
+        asyncContext,
+        identity(chat),
+        serviceIdArgConverter(source),
+        uuid.parse(message_guid),
+        identity(report_spam_token)
+      )
+    )
+  );
+}
 export async function AuthenticatedChatConnection_reserve_username_hash({
   asyncContext,
   abortSignal,
@@ -3672,6 +3717,15 @@ export function TESTING_RemoveMfaKeyTests(): Array<
     returnConverterRemoveMfaKeyArgs,
     returnConverterRemoveMfaKeyOut
   )(Native.TESTING_RemoveMfaKeyTests());
+}
+
+export function TESTING_ReportMessageTests(): Array<
+  GrpcTestCase<ReportMessageArgs, void>
+> {
+  return grpcTestCaseConverter(
+    returnConverterReportMessageArgs,
+    identity
+  )(Native.TESTING_ReportMessageTests());
 }
 
 export function TESTING_ReserveUsernameHashTests(): Array<

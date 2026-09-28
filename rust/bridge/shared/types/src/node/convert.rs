@@ -544,6 +544,38 @@ impl NiceArgConverter for uuid::Uuid {
     }
 }
 
+/// Implements the nice converters for `ServiceId` and its narrower forms, which all cross the
+/// bridge as Service-Id-FixedWidthBinary. `$ts` is the TypeScript class the app sees, and
+/// `$arg_converter` the hand-written function in NiceConverters.ts that unwraps it.
+macro_rules! nice_service_id_arg_converter {
+    ($typ:ty, $ts:expr, $arg_converter:expr) => {
+        #[cfg(feature = "metadata")]
+        impl NiceArgConverter for $typ {
+            fn register_ts_arg_converter(ctx: &mut TsMetadataContext) -> TsArgConverter {
+                TsArgConverter {
+                    nice_type: $ts.into(),
+                    ffi_type: <$typ as ArgTypeInfo>::register_ts_ffi_type(ctx),
+                    converter_function: $arg_converter.into(),
+                }
+            }
+        }
+    };
+}
+macro_rules! nice_service_id_result_converter {
+    ($typ:ty, $ts:expr) => {
+        #[cfg(feature = "metadata")]
+        impl NiceResultConverter for $typ {
+            fn register_ts_result_converter(ctx: &mut TsMetadataContext) -> TsReturnConverter {
+                TsReturnConverter {
+                    nice_type: $ts.into(),
+                    ffi_type: <$typ as ResultTypeInfo>::register_ts_ffi_type(ctx),
+                    converter_function: format!("{}.parseFromServiceIdFixedWidthBinary", $ts),
+                }
+            }
+        }
+    };
+}
+
 impl SimpleArgTypeInfo for libsignal_protocol::ServiceId {
     type ArgType = JsUint8Array;
     fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
@@ -559,16 +591,7 @@ impl SimpleArgTypeInfo for libsignal_protocol::ServiceId {
     }
     register_ts_ffi_type!("Uint8Array<ArrayBuffer>");
 }
-#[cfg(feature = "metadata")]
-impl NiceArgConverter for ServiceId {
-    fn register_ts_arg_converter(_ctx: &mut TsMetadataContext) -> TsArgConverter {
-        TsArgConverter {
-            nice_type: "ServiceId".to_string(),
-            ffi_type: "Uint8Array<ArrayBuffer>".to_string(),
-            converter_function: "serviceIdArgConverter".to_string(),
-        }
-    }
-}
+nice_service_id_arg_converter!(ServiceId, "ServiceId", "serviceIdArgConverter");
 
 impl SimpleArgTypeInfo for libsignal_protocol::Aci {
     type ArgType = JsUint8Array;
@@ -579,6 +602,7 @@ impl SimpleArgTypeInfo for libsignal_protocol::Aci {
     }
     register_ts_ffi_type!("Uint8Array<ArrayBuffer>");
 }
+nice_service_id_arg_converter!(Aci, "Aci", "serviceIdArgConverter");
 
 impl SimpleArgTypeInfo for libsignal_protocol::Pni {
     type ArgType = JsUint8Array;
@@ -1662,16 +1686,7 @@ impl<'a> ResultTypeInfo<'a> for libsignal_protocol::ServiceId {
     }
     register_ts_ffi_type!("Uint8Array<ArrayBuffer>");
 }
-#[cfg(feature = "metadata")]
-impl NiceResultConverter for ServiceId {
-    fn register_ts_result_converter(_ctx: &mut TsMetadataContext) -> TsReturnConverter {
-        TsReturnConverter {
-            nice_type: "ServiceId".to_string(),
-            ffi_type: "Uint8Array<ArrayBuffer>".to_string(),
-            converter_function: "ServiceId.parseFromServiceIdFixedWidthBinary".to_string(),
-        }
-    }
-}
+nice_service_id_result_converter!(ServiceId, "ServiceId");
 
 impl<'a> ResultTypeInfo<'a> for libsignal_protocol::Aci {
     type ResultType = JsUint8Array;
@@ -1680,6 +1695,7 @@ impl<'a> ResultTypeInfo<'a> for libsignal_protocol::Aci {
     }
     register_ts_ffi_type!("Uint8Array<ArrayBuffer>");
 }
+nice_service_id_result_converter!(Aci, "Aci");
 
 impl<'a> ResultTypeInfo<'a> for libsignal_protocol::Pni {
     type ResultType = JsUint8Array;
