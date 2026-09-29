@@ -1327,6 +1327,7 @@ pub mod remote_derives {
         remote = libsignal_net_chat::api::purchase::ChargeFailure,
         ffi_nice_type = "ChargeFailure",
         jni_nice_type = "org.signal.libsignal.net.ChargeFailure",
+        node = false,
     )]
     #[allow(unused)]
     pub struct ChargeFailure {

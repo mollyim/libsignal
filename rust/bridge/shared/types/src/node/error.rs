@@ -1129,56 +1129,18 @@ impl SignalNodeError for ReceiptCredentialError {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
         let message = self.to_string();
         let name = match &self {
-            ReceiptCredentialError::PaymentStillProcessing => {
-                "ReceiptCredentialErrorPaymentStillProcessing"
-            }
-            ReceiptCredentialError::PaymentRequired { .. } => {
-                "ReceiptCredentialErrorPaymentRequired"
-            }
-            ReceiptCredentialError::PaymentNotFound => "ReceiptCredentialErrorPaymentNotFound",
-            ReceiptCredentialError::ReceiptAlreadyIssued => {
-                "ReceiptCredentialErrorReceiptAlreadyIssued"
-            }
+            Self::PaymentStillProcessing => "ReceiptCredentialErrorPaymentStillProcessing",
+            Self::PaymentRequired { .. } => "ReceiptCredentialErrorPaymentRequired",
+            Self::PaymentNotFound => "ReceiptCredentialErrorPaymentNotFound",
+            Self::ReceiptAlreadyIssued => "ReceiptCredentialErrorReceiptAlreadyIssued",
         };
         new_js_error(cx, Some(name), &message, operation_name, |cx| {
-            if let ReceiptCredentialError::PaymentRequired { charge_failure } = self {
+            if let Self::PaymentRequired { charge_failure } = self {
                 let props = cx.empty_object();
+                // We can't use the nice converters here because we _directly_ throw an
+                // unconverted value.
                 let charge_failure: Handle<JsValue> = charge_failure
-                    .map(|cf| {
-                        // We can't use the nice converters here because we _directly_ throw an
-                        // unconverted value.
-                        use libsignal_net_chat::api::purchase::PaymentProvider;
-                        let libsignal_net_chat::api::purchase::ChargeFailure {
-                            processor,
-                            code,
-                            message,
-                            outcome_network_status,
-                            outcome_reason,
-                            outcome_type,
-                        } = *cf;
-                        let obj = cx.empty_object();
-                        let processor = match processor {
-                            PaymentProvider::GooglePlayBilling => "googlePlayBilling",
-                            PaymentProvider::AppleAppStore => "appleAppStore",
-                            PaymentProvider::Stripe => "stripe",
-                            PaymentProvider::Braintree => "braintree",
-                        };
-                        let null: Handle<JsValue> = cx.null().upcast();
-                        for (k, v) in [
-                            ("processor", Some(processor)),
-                            ("code", Some(&code)),
-                            ("message", Some(&message)),
-                            ("outcomeNetworkStatus", outcome_network_status.as_deref()),
-                            ("outcomeReason", outcome_reason.as_deref()),
-                            ("outcomeType", outcome_type.as_deref()),
-                        ] {
-                            let v = v
-                                .map(|x| cx.string(x).upcast::<JsValue>())
-                                .unwrap_or_else(|| null);
-                            obj.prop(cx, k).set(v)?;
-                        }
-                        Ok(obj.upcast())
-                    })
+                    .map(|cf| Ok(cf.convert_into(cx)?.upcast()))
                     .transpose()?
                     .unwrap_or_else(|| cx.null().upcast());
                 props.prop(cx, "_chargeFailure").set(charge_failure)?;

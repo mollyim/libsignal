@@ -39,7 +39,6 @@ import type {
   ReturnFfiBridgeWebAuthnAuthenticationParameters,
   ReturnFfiBridgeWebAuthnCreateParameters,
   ReturnFfiCallQualitySurveyInternal,
-  ReturnFfiChargeFailure,
   ReturnFfiCheckSvrCredentialsArgs,
   ReturnFfiConfirmTotpKeyArgs,
   ReturnFfiConfirmTotpKeyOut,
@@ -133,6 +132,7 @@ import {
   liftNull,
 } from './NiceConverters.js';
 import { Rng } from './RngForTesting.js';
+import type { ChargeFailure } from './Errors.js';
 
 export type AuthCheckResult = 'match' | 'noMatch' | 'invalid';
 
@@ -254,15 +254,6 @@ export type CallQualitySurveyInternal = {
   videoSendPacketLossFraction: number | null;
   callTelemetry: Uint8Array<ArrayBuffer> | null;
   callIdHash: Uint8Array<ArrayBuffer> | null;
-};
-
-export type ChargeFailure = {
-  processor: PaymentProvider;
-  code: string;
-  message: string;
-  outcomeNetworkStatus: string | null;
-  outcomeReason: string | null;
-  outcomeType: string | null;
 };
 
 export type CheckSvrCredentialsArgs = {
@@ -961,19 +952,6 @@ export function returnConverterCallQualitySurveyInternal(
     ),
     callTelemetry: liftNull(identity)(ffiInput.call_telemetry),
     callIdHash: liftNull(identity)(ffiInput.call_id_hash),
-  };
-}
-
-export function returnConverterChargeFailure(
-  ffiInput: Native.ReturnFfiChargeFailure
-): ChargeFailure {
-  return {
-    processor: returnConverterPaymentProvider(ffiInput.processor),
-    code: identity(ffiInput.code),
-    message: identity(ffiInput.message),
-    outcomeNetworkStatus: liftNull(identity)(ffiInput.outcome_network_status),
-    outcomeReason: liftNull(identity)(ffiInput.outcome_reason),
-    outcomeType: liftNull(identity)(ffiInput.outcome_type),
   };
 }
 
@@ -1690,8 +1668,9 @@ export function returnConverterReceiptCredentialError(
       return 'paymentStillProcessing';
     case 1:
       return {
-        paymentRequired: ((arr: Array<ReturnFfiChargeFailure>) =>
-          arr.map(returnConverterChargeFailure))(ffiInput.charge_failure),
+        paymentRequired: ((arr: Array<ChargeFailure>) => arr.map(identity))(
+          ffiInput.charge_failure
+        ),
       };
     case 2:
       return 'paymentNotFound';

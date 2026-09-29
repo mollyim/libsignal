@@ -5,6 +5,8 @@
 
 // WARNING: this file was automatically generated
 
+import type { ChargeFailure } from './Errors.js';
+
 export type Uuid = Uint8Array<ArrayBuffer>;
 
 /// A Native.Timestamp may be measured in seconds or in milliseconds;
@@ -303,15 +305,6 @@ export type ReturnFfiCallQualitySurveyInternal = {
   video_send_packet_loss_fraction: number | null;
   call_telemetry: Uint8Array<ArrayBuffer> | null;
   call_id_hash: Uint8Array<ArrayBuffer> | null;
-};
-
-export type ReturnFfiChargeFailure = {
-  processor: ReturnFfiPaymentProvider;
-  code: string;
-  message: string;
-  outcome_network_status: string | null;
-  outcome_reason: string | null;
-  outcome_type: string | null;
 };
 
 export type ReturnFfiCheckSvrCredentialsArgs = {
@@ -738,7 +731,7 @@ export type ReturnFfiReceiptCredentialError =
     }
   | {
       __type: 1;
-      charge_failure: Array<ReturnFfiChargeFailure>;
+      charge_failure: Array<ChargeFailure>;
     }
   | {
       __type: 2;

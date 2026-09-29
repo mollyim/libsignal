@@ -542,7 +542,7 @@ mod remote_derives {
     }
 
     #[derive(BridgedAsValue)]
-    #[bridge(swift_equatable = true)]
+    #[bridge(arg = false, swift_equatable = true)]
     pub enum ReceiptCredentialError {
         /// The purchase is still pending with the payment provider. The client may retry later.
         PaymentStillProcessing,
@@ -577,6 +577,7 @@ mod remote_derives {
     #[structural_from(
         libsignal_net_chat::grpc::login_purchase::test_cases::CreateLoginReceiptCredentialOut
     )]
+    #[bridge(arg = false)]
     pub enum CreateLoginReceiptCredentialOut {
         Success(ReceiptCredential),
         UnexpectedError { contains: String },

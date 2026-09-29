@@ -36,6 +36,7 @@ import {
   liftNull,
 } from './NiceConverters.js';
 import { Rng } from './RngForTesting.js';
+import type { ChargeFailure } from './Errors.js';
 
 {% macro struct_type(struct) %}
     {%- if struct.is_tuple -%}

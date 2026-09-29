@@ -2607,6 +2607,51 @@ impl NiceResultConverter for crate::net::chat::DeleteBackupMediaStream {
     }
 }
 
+// We provide this manually rather than relying on BridgedAsValue for use in errors.
+impl<'a> ResultTypeInfo<'a> for libsignal_net_chat::api::purchase::ChargeFailure {
+    type ResultType = JsObject;
+
+    fn convert_into(self, cx: &mut Cx<'a>) -> JsResult<'a, Self::ResultType> {
+        use libsignal_net_chat::api::purchase::PaymentProvider;
+        let Self {
+            processor,
+            code,
+            message,
+            outcome_network_status,
+            outcome_reason,
+            outcome_type,
+        } = self;
+        let obj = cx.empty_object();
+        let processor = match processor {
+            PaymentProvider::GooglePlayBilling => "googlePlayBilling",
+            PaymentProvider::AppleAppStore => "appleAppStore",
+            PaymentProvider::Stripe => "stripe",
+            PaymentProvider::Braintree => "braintree",
+        };
+        let null: Handle<JsValue> = cx.null().upcast();
+        for (k, v) in [
+            ("processor", Some(processor)),
+            ("code", Some(&code)),
+            ("message", Some(&message)),
+            ("outcomeNetworkStatus", outcome_network_status.as_deref()),
+            ("outcomeReason", outcome_reason.as_deref()),
+            ("outcomeType", outcome_type.as_deref()),
+        ] {
+            let v = v
+                .map(|x| cx.string(x).upcast::<JsValue>())
+                .unwrap_or_else(|| null);
+            obj.prop(cx, k).set(v)?;
+        }
+        Ok(obj.upcast())
+    }
+
+    #[cfg(feature = "metadata")]
+    fn register_ts_ffi_type(_ctx: &mut TsMetadataContext) -> String {
+        "ChargeFailure".to_string() // defined in Errors.ts
+    }
+}
+nice_identity_result_converter!(libsignal_net_chat::api::purchase::ChargeFailure);
+
 /// The name of the property on JavaScript objects that wrap a boxed Rust value.
 pub(crate) const NATIVE_HANDLE_PROPERTY: &str = "_nativeHandle";
 
