@@ -378,16 +378,16 @@ impl JniError for ReceiptCredentialError {
             env,
             self.to_string(),
             ClassName(match self {
-                ReceiptCredentialError::PaymentStillProcessing => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentStillProcessing"
+                Self::PaymentStillProcessing => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentStillProcessing"
                 }
-                ReceiptCredentialError::PaymentNotFound => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentNotFound"
+                Self::PaymentNotFound => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentNotFound"
                 }
-                ReceiptCredentialError::ReceiptAlreadyIssued => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$ReceiptAlreadyIssued"
+                Self::ReceiptAlreadyIssued => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$ReceiptAlreadyIssued"
                 }
-                ReceiptCredentialError::PaymentRequired { charge_failure } => {
+                Self::PaymentRequired { charge_failure } => {
                     let message = new_jstring_from_owned_utf8(env, self.to_string())?;
                     let charge_failure = charge_failure
                         .clone()
@@ -397,7 +397,7 @@ impl JniError for ReceiptCredentialError {
                     return new_instance(
                         env,
                         ClassName(
-                            "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentRequired",
+                            "org.signal.libsignal.net.ReceiptCredentialException$PaymentRequired",
                         ),
                         jni_args!((
                             message => java.lang.String,

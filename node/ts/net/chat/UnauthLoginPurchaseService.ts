@@ -21,22 +21,23 @@ declare module '../Chat' {
   interface UnauthenticatedChatConnection extends UnauthLoginPurchaseService {}
 }
 
-export type ReceiptCredentialError =
-  | ReceiptCredentialErrorPaymentNotFound
-  | ReceiptCredentialErrorPaymentRequired
-  | ReceiptCredentialErrorPaymentStillProcessing
-  | ReceiptCredentialErrorReceiptAlreadyIssued;
-
 export interface UnauthLoginPurchaseService {
   /**
    * Obtain a ZK receipt credential for a completed one-time login payment.
    * The receipt credential can then be presented at registration.
    *
-   * Subsequent retries to create a login credential for the same purchaseIdentifier must use
-   * an identical receiptCredentialRequestContext.
+   * Subsequent retries to create a login credential for the same `purchaseIdentifier` must use
+   * an identical `receiptCredentialRequestContext`.
    *
    * @throws {StandardNetworkError}
-   * @throws {ReceiptCredentialError}
+   * @throws {ReceiptCredentialErrorPaymentRequired} if the purchase did not complete successfully.
+   * @throws {ReceiptCredentialErrorPaymentStillProcessing} Should be rare if payment has already
+   * been confirmed locally, but the client may retry the request.
+   * @throws {ReceiptCredentialErrorPaymentNotFound} indicates that the server has no record of
+   * `purchaseIdentifier`, which may be a client issue, a server issue, or a problem with the
+   * payment processor; it is not worth retrying.
+   * @throws {ReceiptCredentialErrorReceiptAlreadyIssued} if the purchase was already redeemed for a
+   * receipt credential, but with a different receipt credential request.
    */
   createLoginReceiptCredential: (
     request: {
