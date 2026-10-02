@@ -204,7 +204,9 @@ impl Visit<Scrambler> for proto::Frame {
                 Item::Recipient(item) => item.accept(visitor),
                 Item::Chat(item) => item.accept(visitor),
                 Item::ChatItem(item) => item.accept(visitor),
-                Item::StickerPack(item) => item.accept(visitor),
+                Item::InstalledStickerPack(item) => item.accept(visitor),
+                Item::HiddenStickerPack(item) => item.accept(visitor),
+                Item::FavoriteStickerList(item) => item.accept(visitor),
                 Item::AdHocCall(item) => item.accept(visitor),
                 Item::NotificationProfile(item) => item.accept(visitor),
                 Item::ChatFolder(item) => item.accept(visitor),
@@ -2104,6 +2106,27 @@ impl Visit<Scrambler> for proto::StickerPack {
         } = self;
         packId.randomize(&mut visitor.rng);
         packKey.randomize(&mut visitor.rng);
+    }
+}
+
+impl Visit<Scrambler> for proto::FavoriteStickerList {
+    fn accept(&mut self, visitor: &mut Scrambler) {
+        let Self {
+            favoriteSticker,
+            special_fields: _,
+        } = self;
+        favoriteSticker.accept(visitor);
+    }
+}
+
+impl Visit<Scrambler> for proto::favorite_sticker_list::FavoriteSticker {
+    fn accept(&mut self, visitor: &mut Scrambler) {
+        let Self {
+            sticker,
+            favoritedAtTimestamp: _,
+            special_fields: _,
+        } = self;
+        sticker.accept(visitor);
     }
 }
 
