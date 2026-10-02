@@ -557,6 +557,26 @@ export type ReturnFfiGetStickerUploadFormsResponse = {
   sticker_upload_forms: Array<ReturnFfiS3UploadFormInternal>;
 };
 
+export type ReturnFfiGetSubscriptionReceiptCredentialArgs = {
+  subscriber_id: Uint8Array<ArrayBuffer>;
+  receipt_credential_request_context: Uint8Array<ArrayBuffer>;
+  server_params: ReturnFfiServerPublicParamsSerialized;
+};
+
+export type ReturnFfiGetSubscriptionReceiptCredentialOut =
+  | {
+      __type: 0;
+      _0: Uint8Array<ArrayBuffer>;
+    }
+  | {
+      __type: 1;
+      contains: string;
+    }
+  | {
+      __type: 2;
+      _0: ReturnFfiReceiptCredentialError;
+    };
+
 export type ReturnFfiGetSvrBCredentialsOut =
   | {
       __type: 0;
@@ -3391,6 +3411,12 @@ type NativeFunctions = {
   TESTING_GetStickerUploadFormTests: () => Array<
     GrpcTestCaseFfi<number, ReturnFfiGetStickerUploadFormsOut>
   >;
+  TESTING_GetSubscriptionReceiptCredentialTests: () => Array<
+    GrpcTestCaseFfi<
+      ReturnFfiGetSubscriptionReceiptCredentialArgs,
+      ReturnFfiGetSubscriptionReceiptCredentialOut
+    >
+  >;
   TESTING_InputStreamReadIntoZeroLengthSlice: (
     caps_alphabet_input: InputStream
   ) => Promise<Uint8Array<ArrayBuffer>>;
@@ -3900,6 +3926,13 @@ type NativeFunctions = {
     profile_key_request_context: Serialized<ProfileKeyCredentialRequestContext>,
     server_params: Wrapper<ServerPublicParams>
   ) => CancellablePromise<Serialized<ExpiringProfileKeyCredential>>;
+  UnauthenticatedChatConnection_get_subscription_receipt_credential: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<UnauthenticatedChatConnection>,
+    subscriber_id: Uint8Array<ArrayBuffer>,
+    receipt_credential_request_context: Uint8Array<ArrayBuffer>,
+    server_params: Wrapper<ServerPublicParams>
+  ) => CancellablePromise<Uint8Array<ArrayBuffer>>;
   UnauthenticatedChatConnection_info: (
     chat: Wrapper<UnauthenticatedChatConnection>
   ) => ChatConnectionInfo;
@@ -4648,6 +4681,7 @@ const {
   TESTING_GetPreKeyCountTests,
   TESTING_GetProfileKeyCredentialTests,
   TESTING_GetStickerUploadFormTests,
+  TESTING_GetSubscriptionReceiptCredentialTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
   TESTING_KeyTransChatSendError,
@@ -4814,6 +4848,7 @@ const {
   UnauthenticatedChatConnection_get_pre_keys_group_auth,
   UnauthenticatedChatConnection_get_pre_keys_unrestricted_auth,
   UnauthenticatedChatConnection_get_profile_key_credential,
+  UnauthenticatedChatConnection_get_subscription_receipt_credential,
   UnauthenticatedChatConnection_info,
   UnauthenticatedChatConnection_init_listener,
   UnauthenticatedChatConnection_look_up_username_hash,
@@ -5461,6 +5496,7 @@ export {
   TESTING_GetPreKeyCountTests,
   TESTING_GetProfileKeyCredentialTests,
   TESTING_GetStickerUploadFormTests,
+  TESTING_GetSubscriptionReceiptCredentialTests,
   TESTING_InputStreamReadIntoZeroLengthSlice,
   TESTING_JoinStringArray,
   TESTING_KeyTransChatSendError,
@@ -5627,6 +5663,7 @@ export {
   UnauthenticatedChatConnection_get_pre_keys_group_auth,
   UnauthenticatedChatConnection_get_pre_keys_unrestricted_auth,
   UnauthenticatedChatConnection_get_profile_key_credential,
+  UnauthenticatedChatConnection_get_subscription_receipt_credential,
   UnauthenticatedChatConnection_info,
   UnauthenticatedChatConnection_init_listener,
   UnauthenticatedChatConnection_look_up_username_hash,

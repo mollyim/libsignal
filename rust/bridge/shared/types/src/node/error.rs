@@ -12,8 +12,8 @@ use libsignal_net_chat::api::backups::{BackupAuthCredentialRejected, GetUploadFo
 use libsignal_net_chat::api::keys::GetPreKeysFailure;
 use libsignal_net_chat::api::messages::UploadTooLarge;
 use libsignal_net_chat::grpc::devices::DeviceIdNotFoundInAccount;
-use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::UsernameNotAvailable;
+use libsignal_net_chat::grpc::{login_purchase, subscriptions};
 use neon::thread::LocalKey;
 #[cfg(feature = "signal-media")]
 use signal_media::sanitize::mp4::{Error as Mp4Error, ParseError as Mp4ParseError};
@@ -1125,13 +1125,40 @@ impl SimpleNodeError for libsignal_net_chat::grpc::usernames::ConfirmUsernameErr
     }
 }
 
-impl SignalNodeError for ReceiptCredentialError {
+impl SignalNodeError for login_purchase::ReceiptCredentialError {
     fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
         let message = self.to_string();
         let name = match &self {
             Self::PaymentStillProcessing => "ReceiptCredentialErrorPaymentStillProcessing",
             Self::PaymentRequired { .. } => "ReceiptCredentialErrorPaymentRequired",
             Self::PaymentNotFound => "ReceiptCredentialErrorPaymentNotFound",
+            Self::ReceiptAlreadyIssued => "ReceiptCredentialErrorReceiptAlreadyIssued",
+        };
+        new_js_error(cx, Some(name), &message, operation_name, |cx| {
+            if let Self::PaymentRequired { charge_failure } = self {
+                let props = cx.empty_object();
+                // We can't use the nice converters here because we _directly_ throw an
+                // unconverted value.
+                let charge_failure: Handle<JsValue> = charge_failure
+                    .map(|cf| Ok(cf.convert_into(cx)?.upcast()))
+                    .transpose()?
+                    .unwrap_or_else(|| cx.null().upcast());
+                props.prop(cx, "_chargeFailure").set(charge_failure)?;
+                Ok(props.upcast())
+            } else {
+                no_extra_properties(cx)
+            }
+        })
+    }
+}
+
+impl SignalNodeError for subscriptions::ReceiptCredentialError {
+    fn into_throwable<'cx>(self, cx: &mut Cx<'cx>, operation_name: &str) -> Handle<'cx, JsError> {
+        let message = self.to_string();
+        let name = match &self {
+            Self::NoPaidInvoice => "ReceiptCredentialErrorPaymentStillProcessing",
+            Self::PaymentRequired { .. } => "ReceiptCredentialErrorPaymentRequired",
+            Self::SubscriberNotFound => "ReceiptCredentialErrorPaymentNotFound",
             Self::ReceiptAlreadyIssued => "ReceiptCredentialErrorReceiptAlreadyIssued",
         };
         new_js_error(cx, Some(name), &message, operation_name, |cx| {

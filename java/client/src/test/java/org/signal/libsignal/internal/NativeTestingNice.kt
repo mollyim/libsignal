@@ -202,6 +202,26 @@ public sealed class GetStickerUploadFormsOut {
   public data object Invalid : GetStickerUploadFormsOut()
 }
 
+public data class GetSubscriptionReceiptCredentialArgs(
+  public val subscriberId: ByteArray,
+  public val receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
+  public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
+)
+
+public sealed class GetSubscriptionReceiptCredentialOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.zkgroup.receipts.ReceiptCredential,
+  ) : GetSubscriptionReceiptCredentialOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : GetSubscriptionReceiptCredentialOut()
+
+  public data class ExplicitError(
+    public val _0: org.signal.libsignal.internal.ReceiptCredentialError,
+  ) : GetSubscriptionReceiptCredentialOut()
+}
+
 public sealed class GetSvrBCredentialsOut {
   public data class Success(
     public val username: String,
@@ -1151,6 +1171,70 @@ public object GetStickerUploadFormsOut_Invalid_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = GetStickerUploadFormsOut.Invalid
+}
+
+public object GetSubscriptionReceiptCredentialArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    subscriber_id: Any?,
+    receipt_credential_request_context: Any?,
+    server_params: Any?,
+  ): Any? =
+    GetSubscriptionReceiptCredentialArgs(
+      subscriberId =
+        identity(subscriber_id as ByteArray),
+      receiptCredentialRequestContext =
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredentialRequestContext(x)
+          }
+        )(receipt_credential_request_context as ByteArray),
+      serverParams =
+        downcastFromObject<org.signal.libsignal.internal.ServerPublicParamsSerialized>(
+          server_params as Object,
+        ),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.Success(
+      _0 =
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredential(x)
+          }
+        )(_0 as ByteArray),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_ExplicitError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.ExplicitError(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.ReceiptCredentialError>(_0 as Object),
+    )
 }
 
 public object GetSvrBCredentialsOut_Success_ReturnConverter {
@@ -2452,6 +2536,16 @@ public object NativeTestingNice {
       .resultConverter<Int, Object, Int, org.signal.libsignal.internal.GetStickerUploadFormsOut>({
         identity(it)
       }, { downcastFromObject<org.signal.libsignal.internal.GetStickerUploadFormsOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_GetSubscriptionReceiptCredentialTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetSubscriptionReceiptCredentialTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>({
+        downcastFromObject<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>(it) })(ffiOut)
   }
 
   public fun TESTING_ListMfaKeysTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ListMfaKeysArgs, org.signal.libsignal.internal.ListMfaKeysOut>> {

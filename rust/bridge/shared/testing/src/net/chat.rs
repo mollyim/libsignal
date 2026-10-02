@@ -511,7 +511,7 @@ mod remote_derives {
     use libsignal_core::Aci;
     use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
     use libsignal_net_chat::grpc::devices::{DeviceCapability, LinkedDevice};
-    use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError as ReceiptCredentialErrorReal;
+    use libsignal_net_chat::grpc::{login_purchase, subscriptions};
     use libsignal_protocol::Timestamp;
     use uuid::Uuid;
 
@@ -558,20 +558,44 @@ mod remote_derives {
         /// credential request
         ReceiptAlreadyIssued,
     }
-    impl From<ReceiptCredentialErrorReal> for ReceiptCredentialError {
-        fn from(value: ReceiptCredentialErrorReal) -> Self {
+    impl From<login_purchase::ReceiptCredentialError> for ReceiptCredentialError {
+        fn from(value: login_purchase::ReceiptCredentialError) -> Self {
             match value {
-                ReceiptCredentialErrorReal::PaymentStillProcessing => Self::PaymentStillProcessing,
-                ReceiptCredentialErrorReal::PaymentRequired { charge_failure } => {
+                login_purchase::ReceiptCredentialError::PaymentStillProcessing => {
+                    Self::PaymentStillProcessing
+                }
+                login_purchase::ReceiptCredentialError::PaymentRequired { charge_failure } => {
                     Self::PaymentRequired {
                         charge_failure: BridgeVec(charge_failure.map(|x| *x).into_iter().collect()),
                     }
                 }
-                ReceiptCredentialErrorReal::PaymentNotFound => Self::PaymentNotFound,
-                ReceiptCredentialErrorReal::ReceiptAlreadyIssued => Self::ReceiptAlreadyIssued,
+                login_purchase::ReceiptCredentialError::PaymentNotFound => Self::PaymentNotFound,
+                login_purchase::ReceiptCredentialError::ReceiptAlreadyIssued => {
+                    Self::ReceiptAlreadyIssued
+                }
             }
         }
     }
+    // These don't map exactly, but we reuse the errors on the app language side too.
+    impl From<subscriptions::ReceiptCredentialError> for ReceiptCredentialError {
+        fn from(value: subscriptions::ReceiptCredentialError) -> Self {
+            match value {
+                subscriptions::ReceiptCredentialError::NoPaidInvoice => {
+                    Self::PaymentStillProcessing
+                }
+                subscriptions::ReceiptCredentialError::PaymentRequired { charge_failure } => {
+                    Self::PaymentRequired {
+                        charge_failure: BridgeVec(charge_failure.map(|x| *x).into_iter().collect()),
+                    }
+                }
+                subscriptions::ReceiptCredentialError::SubscriberNotFound => Self::PaymentNotFound,
+                subscriptions::ReceiptCredentialError::ReceiptAlreadyIssued => {
+                    Self::ReceiptAlreadyIssued
+                }
+            }
+        }
+    }
+
     #[allow(clippy::large_enum_variant)]
     #[derive(BridgedAsValue, StructuralFrom)]
     #[structural_from(
@@ -579,6 +603,26 @@ mod remote_derives {
     )]
     #[bridge(arg = false)]
     pub enum CreateLoginReceiptCredentialOut {
+        Success(ReceiptCredential),
+        UnexpectedError { contains: String },
+        ExplicitError(ReceiptCredentialError),
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(
+        libsignal_net_chat::grpc::subscriptions::test_cases::GetReceiptCredentialArgs
+    )]
+    pub struct GetSubscriptionReceiptCredentialArgs {
+        pub subscriber_id: Vec<u8>,
+        pub receipt_credential_request_context: ReceiptCredentialRequestContext,
+        pub server_params: ServerPublicParamsSerialized,
+    }
+
+    #[allow(clippy::large_enum_variant)]
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::subscriptions::test_cases::GetReceiptCredentialOut)]
+    #[bridge(arg = false)]
+    pub enum GetSubscriptionReceiptCredentialOut {
         Success(ReceiptCredential),
         UnexpectedError { contains: String },
         ExplicitError(ReceiptCredentialError),
@@ -1463,4 +1507,12 @@ fn TESTING_GetProfileKeyCredentialTests() -> GrpcTestCases<
 #[bridge_fn(nice = true)]
 fn TESTING_ReportMessageTests() -> GrpcTestCases<remote_derives::ReportMessageArgs, ()> {
     libsignal_net_chat::grpc::messages::test_cases::report_message_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetSubscriptionReceiptCredentialTests() -> GrpcTestCases<
+    remote_derives::GetSubscriptionReceiptCredentialArgs,
+    remote_derives::GetSubscriptionReceiptCredentialOut,
+> {
+    libsignal_net_chat::grpc::subscriptions::test_cases::get_receipt_credential_test_cases().into()
 }

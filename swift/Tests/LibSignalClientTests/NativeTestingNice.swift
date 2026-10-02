@@ -976,6 +976,19 @@ internal enum GetStickerUploadFormsOut {
     case invalid
 }
 
+internal struct GetSubscriptionReceiptCredentialArgs {
+    var subscriberId: Data
+    var receiptCredentialRequestContext: ReceiptCredentialRequestContext
+    var serverParams: ServerPublicParamsSerialized
+
+}
+
+internal enum GetSubscriptionReceiptCredentialOut {
+    case success(ReceiptCredential)
+    case unexpectedError(contains: String)
+    case explicitError(ReceiptCredentialError)
+}
+
 internal enum GetSvrBCredentialsOut {
     case success(username: String, password: String)
     case credentialRejected
@@ -1970,6 +1983,68 @@ internal enum DerivedReturnConverterGetStickerUploadFormsOut: NiceReturnConverte
             return GetStickerUploadFormsOut.invalid
         default:
             throw SignalError.internalError("Unexpected enum tag for GetStickerUploadFormsOut: \(ffiTag)")
+        }
+    }
+}
+
+internal enum DerivedReturnConverterGetSubscriptionReceiptCredentialArgs: NiceReturnConverter {
+    typealias NiceReturn = GetSubscriptionReceiptCredentialArgs
+    typealias FfiReturn = SignalGetSubscriptionReceiptCredentialArgsFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalGetSubscriptionReceiptCredentialArgsFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let subscriber_id = Result { try DataConverter.convertReturn(consuming: ffiValue.subscriber_id) }
+        let receipt_credential_request_context = Result {
+            try ByteArrayConverter<ReceiptCredentialRequestContext>.convertReturn(
+                consuming: ffiValue.receipt_credential_request_context
+            )
+        }
+        let server_params = Result {
+            try DerivedReturnConverterServerPublicParamsSerialized.convertReturn(consuming: ffiValue.server_params)
+        }
+
+        return GetSubscriptionReceiptCredentialArgs(
+            subscriberId: try subscriber_id.get(),
+            receiptCredentialRequestContext: try receipt_credential_request_context.get(),
+            serverParams: try server_params.get()
+        )
+    }
+}
+
+internal enum DerivedReturnConverterGetSubscriptionReceiptCredentialOut: NiceReturnConverter {
+    typealias NiceReturn = GetSubscriptionReceiptCredentialOut
+    typealias FfiReturn = SignalGetSubscriptionReceiptCredentialOutFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalGetSubscriptionReceiptCredentialOutFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+        let ffiTag = ffiValue.tag
+        switch ffiTag {
+        case SignalGetSubscriptionReceiptCredentialOutFfiResultSuccess:
+            let _0 = Result {
+                try ByteArrayConverter<ReceiptCredential>.convertReturn(
+                    consuming: ffiValue.success._0
+                )
+            }
+            return GetSubscriptionReceiptCredentialOut.success(try _0.get())
+        case SignalGetSubscriptionReceiptCredentialOutFfiResultUnexpectedError:
+            let contains = Result {
+                try StringConverter.convertReturn(
+                    consuming: ffiValue.unexpected_error.contains
+                )
+            }
+            return GetSubscriptionReceiptCredentialOut.unexpectedError(contains: try contains.get())
+        case SignalGetSubscriptionReceiptCredentialOutFfiResultExplicitError:
+            let _0 = Result {
+                try DerivedReturnConverterReceiptCredentialError.convertReturn(
+                    consuming: ffiValue.explicit_error._0
+                )
+            }
+            return GetSubscriptionReceiptCredentialOut.explicitError(try _0.get())
+        default:
+            throw SignalError.internalError("Unexpected enum tag for GetSubscriptionReceiptCredentialOut: \(ffiTag)")
         }
     }
 }
@@ -4096,6 +4171,24 @@ internal enum NativeTestingNice {
         )
         return try GrpcTestCaseVecConverter<
             IdentityResultConverter<Int32>, DerivedReturnConverterGetStickerUploadFormsOut
+        >.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func TESTING_GetSubscriptionReceiptCredentialTests() throws -> [GrpcTestCase<
+        GetSubscriptionReceiptCredentialArgs, GetSubscriptionReceiptCredentialOut
+    >] {
+        var rawOutput = GrpcTestCaseVecConverter<
+            DerivedReturnConverterGetSubscriptionReceiptCredentialArgs,
+            DerivedReturnConverterGetSubscriptionReceiptCredentialOut
+        >.emptyFfiReturn()
+        try checkError(
+            SignalFfi.signal_testing_get_subscription_receipt_credential_tests(
+                &rawOutput,
+            )
+        )
+        return try GrpcTestCaseVecConverter<
+            DerivedReturnConverterGetSubscriptionReceiptCredentialArgs,
+            DerivedReturnConverterGetSubscriptionReceiptCredentialOut
         >.convertReturn(consuming: rawOutput)
 
     }

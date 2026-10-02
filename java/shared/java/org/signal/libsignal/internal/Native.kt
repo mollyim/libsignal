@@ -3429,6 +3429,15 @@ internal object Native {
   ): CompletableFuture<ByteArray>
 
   @JvmStatic
+  public external fun UnauthenticatedChatConnection_get_subscription_receipt_credential(
+    asyncRuntime: ObjectHandle,
+    chat: SimpleOwner,
+    subscriberId: ByteArray,
+    receiptCredentialRequestContext: ByteArray,
+    serverParams: SimpleOwner,
+  ): CompletableFuture<ByteArray>
+
+  @JvmStatic
   public external fun UnauthenticatedChatConnection_info(chat: ObjectHandle): ObjectHandle
 
   @JvmStatic

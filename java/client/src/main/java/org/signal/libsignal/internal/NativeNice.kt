@@ -2536,6 +2536,42 @@ public object NativeNice {
       }
   }
 
+  public fun UnauthenticatedChatConnection_get_subscription_receipt_credential(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.UnauthenticatedChatConnection,
+    subscriberId: ByteArray,
+    receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
+    serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
+  ): CompletableFuture<org.signal.libsignal.zkgroup.receipts.ReceiptCredential> {
+    val ffi_chat = identity(chat)
+    val ffi_subscriber_id = identity(subscriberId)
+    val ffi_receipt_credential_request_context =
+      (org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext::getInternalContentsForJNI)(
+        receiptCredentialRequestContext,
+      )
+    val ffi_server_params = identity(serverParams)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.UnauthenticatedChatConnection_get_subscription_receipt_credential(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_subscriber_id,
+          ffi_receipt_credential_request_context,
+          ffi_server_params,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredential(x)
+          }
+        )(it)
+      }
+  }
+
   public fun UnauthenticatedChatConnection_submit_call_quality_survey(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.UnauthenticatedChatConnection,

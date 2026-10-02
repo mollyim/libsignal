@@ -6830,6 +6830,14 @@ SignalFfiError* signal_unauthenticated_chat_connection_get_profile_key_credentia
   const SignalType_FixedArray473_uint8_t* profile_key_request_context,
   SignalConstPointerServerPublicParams server_params
 );
+SignalFfiError* signal_unauthenticated_chat_connection_get_subscription_receipt_credential(
+  SignalCPromiseOwnedBuffer* promise,
+  SignalConstPointerTokioAsyncContext async_runtime,
+  SignalConstPointerUnauthenticatedChatConnection chat,
+  const SignalType_FixedArray32_uint8_t* subscriber_id,
+  SignalBorrowedBuffer receipt_credential_request_context,
+  SignalConstPointerServerPublicParams server_params
+);
 SignalFfiError* signal_unauthenticated_chat_connection_info(
   SignalMutPointerChatConnectionInfo* out,
   SignalConstPointerUnauthenticatedChatConnection chat

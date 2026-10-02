@@ -6161,6 +6161,43 @@ internal enum NativeNice {
         )
 
     }
+    internal static func UnauthenticatedChatConnection_get_subscription_receipt_credential(
+        asyncContext: TokioAsyncContext,
+        chat: UnauthenticatedChatConnection,
+        subscriberId subscriber_id: Data,
+        receiptCredentialRequestContext receipt_credential_request_context: ReceiptCredentialRequestContext,
+        serverParams server_params: ServerPublicParams,
+    ) async throws -> ReceiptCredential {
+        let rawOutput: ByteArrayConverter<ReceiptCredential>.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerUnauthenticatedChatConnection, UnauthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        FixedByteArrayConverter<FixedByteArrayHelper32>.convertArgBorrowed(subscriber_id) {
+                            subscriber_idFfi in
+                            ByteArrayConverter<ReceiptCredentialRequestContext>.convertArgBorrowed(
+                                receipt_credential_request_context
+                            ) { receipt_credential_request_contextFfi in
+                                BridgeHandleRefConverter<SignalMutPointerServerPublicParams, ServerPublicParams>
+                                    .convertArgBorrowed(server_params) { server_paramsFfi in
+                                        SignalFfi
+                                            .signal_unauthenticated_chat_connection_get_subscription_receipt_credential(
+                                                promiseFfi,
+                                                asyncContextFfi.const(),
+                                                chatFfi,
+                                                subscriber_idFfi,
+                                                receipt_credential_request_contextFfi,
+                                                server_paramsFfi,
+                                            )
+                                    }
+                            }
+                        }
+                    }
+            }
+        return try ByteArrayConverter<ReceiptCredential>.convertReturn(consuming: rawOutput)
+
+    }
     internal static func UnauthenticatedChatConnection_submit_call_quality_survey(
         asyncContext: TokioAsyncContext,
         chat: UnauthenticatedChatConnection,

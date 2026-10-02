@@ -18,6 +18,7 @@ pub mod messages;
 pub mod payments;
 pub mod profiles;
 pub mod stickers;
+pub mod subscriptions;
 pub mod usernames;
 
 use std::convert::Infallible;

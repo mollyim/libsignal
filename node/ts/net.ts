@@ -48,6 +48,7 @@ export * from './net/chat/UnauthKeysService.js';
 export * from './net/chat/UnauthLoginPurchaseService.js';
 export * from './net/chat/UnauthMessagesService.js';
 export * from './net/chat/UnauthProfilesService.js';
+export * from './net/chat/UnauthSubscriptionsService.js';
 export * from './net/chat/UnauthUsernamesService.js';
 
 export * from './net/Registration.js';

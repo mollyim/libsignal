@@ -1035,6 +1035,40 @@ typedef struct {
 } SignalGetStickerUploadFormsOutFfiResult;
 static_assert_64bit(sizeof(SignalGetStickerUploadFormsOutFfiResult) == 96);
 static_assert_64bit(alignof(SignalGetStickerUploadFormsOutFfiResult) == 8);
+typedef struct {
+  SignalOwnedBuffer subscriber_id;
+  SignalOwnedBuffer receipt_credential_request_context;
+  SignalServerPublicParamsSerializedFfiResult server_params;
+} SignalGetSubscriptionReceiptCredentialArgsFfiResult;
+static_assert_64bit(offsetof(SignalGetSubscriptionReceiptCredentialArgsFfiResult, subscriber_id) == 0);
+static_assert_64bit(offsetof(SignalGetSubscriptionReceiptCredentialArgsFfiResult, receipt_credential_request_context) == 16);
+static_assert_64bit(offsetof(SignalGetSubscriptionReceiptCredentialArgsFfiResult, server_params) == 32);
+static_assert_64bit(sizeof(SignalGetSubscriptionReceiptCredentialArgsFfiResult) == 48);
+static_assert_64bit(alignof(SignalGetSubscriptionReceiptCredentialArgsFfiResult) == 8);
+typedef enum {
+  SignalGetSubscriptionReceiptCredentialOutFfiResultSuccess,
+  SignalGetSubscriptionReceiptCredentialOutFfiResultUnexpectedError,
+  SignalGetSubscriptionReceiptCredentialOutFfiResultExplicitError,
+} SignalGetSubscriptionReceiptCredentialOutFfiResult_Tag;
+typedef struct {
+  SignalOwnedBuffer _0;
+} SignalGetSubscriptionReceiptCredentialOutFfiResultSignalSuccess_Body;
+typedef struct {
+  const int8_t* contains;
+} SignalGetSubscriptionReceiptCredentialOutFfiResultSignalUnexpectedError_Body;
+typedef struct {
+  SignalReceiptCredentialErrorFfiResult _0;
+} SignalGetSubscriptionReceiptCredentialOutFfiResultSignalExplicitError_Body;
+typedef struct {
+  SignalGetSubscriptionReceiptCredentialOutFfiResult_Tag tag;
+  union {
+    SignalGetSubscriptionReceiptCredentialOutFfiResultSignalSuccess_Body success;
+    SignalGetSubscriptionReceiptCredentialOutFfiResultSignalUnexpectedError_Body unexpected_error;
+    SignalGetSubscriptionReceiptCredentialOutFfiResultSignalExplicitError_Body explicit_error;
+  };
+} SignalGetSubscriptionReceiptCredentialOutFfiResult;
+static_assert_64bit(sizeof(SignalGetSubscriptionReceiptCredentialOutFfiResult) == 40);
+static_assert_64bit(alignof(SignalGetSubscriptionReceiptCredentialOutFfiResult) == 8);
 typedef enum {
   SignalGetSvrBCredentialsOutFfiResultSuccess,
   SignalGetSvrBCredentialsOutFfiResultCredentialRejected,
@@ -2154,6 +2188,9 @@ SignalFfiError* signal_testing_get_profile_key_credential_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_get_sticker_upload_form_tests(
+  SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
+);
+SignalFfiError* signal_testing_get_subscription_receipt_credential_tests(
   SignalOwnedBufferOfGrpcTestCaseBridgedFfi* out
 );
 SignalFfiError* signal_testing_handle_type_clone(

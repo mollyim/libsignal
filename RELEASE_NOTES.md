@@ -6,3 +6,4 @@ v0.104.0
 - New typed APIs:
   - UnauthProfilesService.getProfileKeyCredential
   - Messages.reportMessage
+  - UnauthSubscriptionsService.getSubscriptionReceiptCredential (just `getReceiptCredential` for Kotlin)

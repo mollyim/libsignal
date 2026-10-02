@@ -23,8 +23,8 @@ use libsignal_net_chat::api::messages::{MismatchedDeviceError, UploadTooLarge};
 use libsignal_net_chat::api::purchase::ChargeFailure;
 use libsignal_net_chat::api::registration::{RegistrationLock, VerificationCodeNotDeliverable};
 use libsignal_net_chat::grpc::devices::DeviceIdNotFoundInAccount;
-use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::UsernameNotAvailable;
+use libsignal_net_chat::grpc::{login_purchase, subscriptions};
 use libsignal_protocol::*;
 use signal_crypto::Error as SignalCryptoError;
 use usernames::{UsernameError, UsernameLinkError};
@@ -1387,9 +1387,9 @@ impl IntoFfiError for libsignal_net_chat::grpc::usernames::ConfirmUsernameError 
     }
 }
 
-impl FfiError for ReceiptCredentialError {
+impl FfiError for login_purchase::ReceiptCredentialError {
     fn provide_charge_failure(&self) -> Result<Option<ChargeFailure>, WrongErrorKind> {
-        if let ReceiptCredentialError::PaymentRequired { charge_failure } = self {
+        if let Self::PaymentRequired { charge_failure } = self {
             Ok(charge_failure.as_ref().map(|x| (**x).clone()))
         } else {
             Err(WrongErrorKind)
@@ -1402,16 +1402,37 @@ impl FfiError for ReceiptCredentialError {
 
     fn code(&self) -> SignalErrorCode {
         match self {
-            ReceiptCredentialError::PaymentStillProcessing => {
+            Self::PaymentStillProcessing => {
                 SignalErrorCode::ReceiptCredentialErrorPaymentStillProcessing
             }
-            ReceiptCredentialError::PaymentRequired { .. } => {
-                SignalErrorCode::ReceiptCredentialErrorPaymentRequired
+            Self::PaymentRequired { .. } => SignalErrorCode::ReceiptCredentialErrorPaymentRequired,
+            Self::PaymentNotFound => SignalErrorCode::ReceiptCredentialErrorPaymentNotFound,
+            Self::ReceiptAlreadyIssued => {
+                SignalErrorCode::ReceiptCredentialErrorReceiptAlreadyIssued
             }
-            ReceiptCredentialError::PaymentNotFound => {
-                SignalErrorCode::ReceiptCredentialErrorPaymentNotFound
-            }
-            ReceiptCredentialError::ReceiptAlreadyIssued => {
+        }
+    }
+}
+
+impl FfiError for subscriptions::ReceiptCredentialError {
+    fn provide_charge_failure(&self) -> Result<Option<ChargeFailure>, WrongErrorKind> {
+        if let Self::PaymentRequired { charge_failure } = self {
+            Ok(charge_failure.as_ref().map(|x| (**x).clone()))
+        } else {
+            Err(WrongErrorKind)
+        }
+    }
+
+    fn describe(&self) -> Cow<'_, str> {
+        self.to_string().into()
+    }
+
+    fn code(&self) -> SignalErrorCode {
+        match self {
+            Self::NoPaidInvoice => SignalErrorCode::ReceiptCredentialErrorPaymentStillProcessing,
+            Self::PaymentRequired { .. } => SignalErrorCode::ReceiptCredentialErrorPaymentRequired,
+            Self::SubscriberNotFound => SignalErrorCode::ReceiptCredentialErrorPaymentNotFound,
+            Self::ReceiptAlreadyIssued => {
                 SignalErrorCode::ReceiptCredentialErrorReceiptAlreadyIssued
             }
         }

@@ -75,7 +75,8 @@ impl TryFrom<GrpcChargeFailure> for ChargeFailure {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, displaydoc::Display)]
+#[derive(Clone, Debug, displaydoc::Display)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum ReceiptCredentialError {
     /// The purchase is still pending with the payment provider. The client may retry later.
     PaymentStillProcessing,

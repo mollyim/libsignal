@@ -65,6 +65,8 @@ import type {
   ReturnFfiGetProfileKeyCredentialOut,
   ReturnFfiGetStickerUploadFormsOut,
   ReturnFfiGetStickerUploadFormsResponse,
+  ReturnFfiGetSubscriptionReceiptCredentialArgs,
+  ReturnFfiGetSubscriptionReceiptCredentialOut,
   ReturnFfiGetSvrBCredentialsOut,
   ReturnFfiLinkedDeviceInternal,
   ReturnFfiListMediaArgs,
@@ -427,6 +429,23 @@ export type GetStickerUploadFormsResponse = {
   manifestUploadForm: S3UploadFormInternal;
   stickerUploadForms: Array<S3UploadFormInternal>;
 };
+
+export type GetSubscriptionReceiptCredentialArgs = {
+  subscriberId: Uint8Array<ArrayBuffer>;
+  receiptCredentialRequestContext: zkgroup.ReceiptCredentialRequestContext;
+  serverParams: ServerPublicParamsSerialized;
+};
+
+export type GetSubscriptionReceiptCredentialOut =
+  | {
+      success: zkgroup.ReceiptCredential;
+    }
+  | {
+      unexpectedError: string;
+    }
+  | {
+      explicitError: ReceiptCredentialError;
+    };
 
 export type GetSvrBCredentialsOut =
   | {
@@ -1388,6 +1407,45 @@ export function returnConverterGetStickerUploadFormsResponse(
       ffiInput.sticker_upload_forms
     ),
   };
+}
+
+export function returnConverterGetSubscriptionReceiptCredentialArgs(
+  ffiInput: Native.ReturnFfiGetSubscriptionReceiptCredentialArgs
+): GetSubscriptionReceiptCredentialArgs {
+  return {
+    subscriberId: identity(ffiInput.subscriber_id),
+    receiptCredentialRequestContext: ((x) =>
+      new zkgroup.ReceiptCredentialRequestContext(x))(
+      ffiInput.receipt_credential_request_context
+    ),
+    serverParams: returnConverterServerPublicParamsSerialized(
+      ffiInput.server_params
+    ),
+  };
+}
+
+export function returnConverterGetSubscriptionReceiptCredentialOut(
+  ffiInput: Native.ReturnFfiGetSubscriptionReceiptCredentialOut
+): GetSubscriptionReceiptCredentialOut {
+  switch (ffiInput.__type) {
+    case 0:
+      return {
+        success: ((x) => new zkgroup.ReceiptCredential(x))(ffiInput._0),
+      };
+    case 1:
+      return {
+        unexpectedError: identity(ffiInput.contains),
+      };
+    case 2:
+      return {
+        explicitError: returnConverterReceiptCredentialError(ffiInput._0),
+      };
+    default:
+      ffiInput satisfies never;
+      throw new Error(
+        'Unknown FFI return enum type for GetSubscriptionReceiptCredentialOut'
+      );
+  }
 }
 
 export function returnConverterGetSvrBCredentialsOut(
@@ -3423,6 +3481,18 @@ export function TESTING_GetStickerUploadFormTests(): Array<
   )(Native.TESTING_GetStickerUploadFormTests());
 }
 
+export function TESTING_GetSubscriptionReceiptCredentialTests(): Array<
+  GrpcTestCase<
+    GetSubscriptionReceiptCredentialArgs,
+    GetSubscriptionReceiptCredentialOut
+  >
+> {
+  return grpcTestCaseConverter(
+    returnConverterGetSubscriptionReceiptCredentialArgs,
+    returnConverterGetSubscriptionReceiptCredentialOut
+  )(Native.TESTING_GetSubscriptionReceiptCredentialTests());
+}
+
 export function TESTING_ListMfaKeysTests(): Array<
   GrpcTestCase<ListMfaKeysArgs, ListMfaKeysOut>
 > {
@@ -4909,6 +4979,36 @@ export async function UnauthenticatedChatConnection_get_profile_key_credential({
         asyncContext,
         identity(chat),
         ByteArray.prototype.getContents.call(profile_key_request_context),
+        identity(server_params)
+      )
+    )
+  );
+}
+export async function UnauthenticatedChatConnection_get_subscription_receipt_credential({
+  asyncContext,
+  abortSignal,
+  chat: chat,
+  subscriberId: subscriber_id,
+  receiptCredentialRequestContext: receipt_credential_request_context,
+  serverParams: server_params,
+}: {
+  asyncContext: TokioAsyncContext;
+  abortSignal?: AbortSignal;
+  chat: Native.Wrapper<Native.UnauthenticatedChatConnection>;
+  subscriberId: Uint8Array<ArrayBuffer>;
+  receiptCredentialRequestContext: zkgroup.ReceiptCredentialRequestContext;
+  serverParams: Native.Wrapper<Native.ServerPublicParams>;
+}): Promise<zkgroup.ReceiptCredential> {
+  return ((x) => new zkgroup.ReceiptCredential(x))(
+    await asyncContext.makeCancellable(
+      abortSignal,
+      Native.UnauthenticatedChatConnection_get_subscription_receipt_credential(
+        asyncContext,
+        identity(chat),
+        identity(subscriber_id),
+        ByteArray.prototype.getContents.call(
+          receipt_credential_request_context
+        ),
         identity(server_params)
       )
     )

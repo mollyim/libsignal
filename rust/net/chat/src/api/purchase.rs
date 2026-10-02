@@ -29,7 +29,8 @@ pub enum PaymentProvider {
 ///
 /// IAP payment processors will never include charge failure information, and detailed order
 /// information should be retrieved from the payment processor directly.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct ChargeFailure {
     pub processor: PaymentProvider,
     /// See [Stripe failure codes](https://stripe.com/docs/api/charges/object#charge_object-failure_code)

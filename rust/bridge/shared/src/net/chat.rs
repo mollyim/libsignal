@@ -55,7 +55,8 @@ use libsignal_net_chat::grpc::devices::{
     DeviceCapability, DeviceIdNotFoundInAccount, LinkedDevice,
 };
 use libsignal_net_chat::grpc::keys::{PublicEcPreKey, PublicKemPreKey, PublicSignedEcPreKey};
-use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
+use libsignal_net_chat::grpc::login_purchase;
+use libsignal_net_chat::grpc::subscriptions;
 use libsignal_net_chat::grpc::usernames::{ConfirmUsernameError, UsernameNotAvailable};
 use libsignal_net_chat::stream_util::{BulkPolledStreamChunk, BulkPolledStreamTerminationReason};
 use libsignal_net_chat::ws::OverWs;
@@ -1302,7 +1303,7 @@ async fn UnauthenticatedChatConnection_create_login_receipt_credential(
     receipt_credential_request_context: ReceiptCredentialRequestContext,
     server_params: BridgeHandleRef<'_, ServerPublicParams>,
     purchase_time: Timestamp,
-) -> Result<ReceiptCredential, RequestError<ReceiptCredentialError>> {
+) -> Result<ReceiptCredential, RequestError<login_purchase::ReceiptCredentialError>> {
     chat.require_grpc()
         .await
         .create_login_receipt_credential(
@@ -1474,6 +1475,23 @@ async fn AuthenticatedChatConnection_report_message(
     chat.require_grpc()
         .await
         .report_message(source, message_guid, &report_spam_token)
+        .await
+}
+
+#[bridge_io(TokioAsyncContext, nice = true)]
+async fn UnauthenticatedChatConnection_get_subscription_receipt_credential(
+    chat: BridgeHandleRef<'_, UnauthenticatedChatConnection>,
+    subscriber_id: subscriptions::SubscriberId,
+    receipt_credential_request_context: ReceiptCredentialRequestContext,
+    server_params: BridgeHandleRef<'_, ServerPublicParams>,
+) -> Result<ReceiptCredential, RequestError<subscriptions::ReceiptCredentialError>> {
+    chat.require_grpc()
+        .await
+        .get_subscription_receipt_credential(
+            subscriber_id,
+            &receipt_credential_request_context,
+            &server_params,
+        )
         .await
 }
 
