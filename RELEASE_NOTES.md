@@ -7,3 +7,4 @@ v0.104.0
   - UnauthProfilesService.getProfileKeyCredential
   - Messages.reportMessage
   - UnauthSubscriptionsService.getSubscriptionReceiptCredential (just `getReceiptCredential` for Kotlin)
+- Internal: libsignal now uses Android Gradle Plugin 9.4.0 and Gradle 9.6.0.

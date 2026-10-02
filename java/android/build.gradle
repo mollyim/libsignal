@@ -200,9 +200,9 @@ afterEvaluate {
         }
     }
 
-    setUpSigningKey(signing)
+    rootProject.ext.setUpSigningKey(signing)
     signing {
-        required = { isReleaseBuild() && gradle.taskGraph.hasTask(":android:publish") }
+        required = { rootProject.ext.isReleaseBuild() && gradle.taskGraph.hasTask(":android:publish") }
         sign publishing.publications.mavenJava
     }
 }
