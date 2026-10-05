@@ -145,7 +145,8 @@ pub mod test_cases {
     use zkgroup::SECONDS_PER_DAY;
 
     use super::*;
-    use crate::grpc::{GrpcTestCase, test_case_util::day_align};
+    use crate::grpc::GrpcTestCase;
+    use crate::grpc::test_case_util::day_align;
 
     pub(crate) const ACI_UUID: Uuid = uuid!("9d0652a3-dcc3-4d11-975f-74d61598733f");
     #[cfg(test)]

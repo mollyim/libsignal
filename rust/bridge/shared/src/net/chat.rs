@@ -55,9 +55,8 @@ use libsignal_net_chat::grpc::devices::{
     DeviceCapability, DeviceIdNotFoundInAccount, LinkedDevice,
 };
 use libsignal_net_chat::grpc::keys::{PublicEcPreKey, PublicKemPreKey, PublicSignedEcPreKey};
-use libsignal_net_chat::grpc::login_purchase;
-use libsignal_net_chat::grpc::subscriptions;
 use libsignal_net_chat::grpc::usernames::{ConfirmUsernameError, UsernameNotAvailable};
+use libsignal_net_chat::grpc::{login_purchase, subscriptions};
 use libsignal_net_chat::stream_util::{BulkPolledStreamChunk, BulkPolledStreamTerminationReason};
 use libsignal_net_chat::ws::OverWs;
 use libsignal_protocol::{
