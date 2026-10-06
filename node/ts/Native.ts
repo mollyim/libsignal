@@ -1648,6 +1648,9 @@ type NativeFunctions = {
   ChatConnectionInfo_ip_version: (
     connection_info: Wrapper<ChatConnectionInfo>
   ) => number;
+  ChatConnectionInfo_is_direct: (
+    connection_info: Wrapper<ChatConnectionInfo>
+  ) => boolean;
   ChatConnectionInfo_local_port: (
     connection_info: Wrapper<ChatConnectionInfo>
   ) => number;
@@ -4199,6 +4202,7 @@ const {
   CdsiLookup_token,
   ChatConnectionInfo_description,
   ChatConnectionInfo_ip_version,
+  ChatConnectionInfo_is_direct,
   ChatConnectionInfo_local_port,
   CiphertextMessage_FromPlaintextContent,
   CiphertextMessage_Serialize,
@@ -5014,6 +5018,7 @@ export {
   CdsiLookup_token,
   ChatConnectionInfo_description,
   ChatConnectionInfo_ip_version,
+  ChatConnectionInfo_is_direct,
   ChatConnectionInfo_local_port,
   CiphertextMessage_FromPlaintextContent,
   CiphertextMessage_Serialize,

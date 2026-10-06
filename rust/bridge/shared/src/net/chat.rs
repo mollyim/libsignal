@@ -109,17 +109,24 @@ fn HttpRequest_add_header(
     request.add_header(name.into_inner(), value.into_inner())
 }
 
-#[bridge_fn(jni = false)]
+#[bridge_fn]
 fn ChatConnectionInfo_local_port(connection_info: &ChatConnectionInfo) -> u16 {
     connection_info.transport_info.local_addr.port()
 }
 
-#[bridge_fn(jni = false)]
+#[bridge_fn]
 fn ChatConnectionInfo_ip_version(connection_info: &ChatConnectionInfo) -> u8 {
     connection_info.transport_info.ip_version() as u8
 }
 
-#[bridge_fn(jni = false)]
+/// Whether the connection was made directly to the Signal service, as opposed to through a
+/// reflector or a user-configured proxy.
+#[bridge_fn]
+fn ChatConnectionInfo_is_direct(connection_info: &ChatConnectionInfo) -> bool {
+    connection_info.route_info.unresolved.proxy.is_none()
+}
+
+#[bridge_fn]
 fn ChatConnectionInfo_description(connection_info: &ChatConnectionInfo) -> String {
     connection_info.to_string()
 }
@@ -343,7 +350,7 @@ async fn AuthenticatedChatConnection_disconnect(chat: &AuthenticatedChatConnecti
     chat.disconnect().await
 }
 
-#[bridge_fn(jni = false)]
+#[bridge_fn]
 fn AuthenticatedChatConnection_info(chat: &AuthenticatedChatConnection) -> ChatConnectionInfo {
     chat.info()
 }

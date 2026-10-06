@@ -4487,6 +4487,10 @@ SignalFfiError* signal_chat_connection_info_ip_version(
   uint8_t* out,
   SignalConstPointerChatConnectionInfo connection_info
 );
+SignalFfiError* signal_chat_connection_info_is_direct(
+  bool* out,
+  SignalConstPointerChatConnectionInfo connection_info
+);
 SignalFfiError* signal_chat_connection_info_local_port(
   uint16_t* out,
   SignalConstPointerChatConnectionInfo connection_info

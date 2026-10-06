@@ -393,6 +393,9 @@ internal object Native {
   ): CompletableFuture<Object>
 
   @JvmStatic
+  public external fun AuthenticatedChatConnection_info(chat: ObjectHandle): ObjectHandle
+
+  @JvmStatic
   public external fun AuthenticatedChatConnection_init_listener(
     chat: ObjectHandle,
     listener: BridgeChatListener,
@@ -959,6 +962,21 @@ internal object Native {
 
   @JvmStatic
   public external fun CdsiLookup_token(lookup: ObjectHandle): ByteArray
+
+  @JvmStatic
+  public external fun ChatConnectionInfo_Destroy(handle: ObjectHandle): Unit
+
+  @JvmStatic
+  public external fun ChatConnectionInfo_description(connectionInfo: ObjectHandle): String
+
+  @JvmStatic
+  public external fun ChatConnectionInfo_ip_version(connectionInfo: ObjectHandle): Int
+
+  @JvmStatic
+  public external fun ChatConnectionInfo_is_direct(connectionInfo: ObjectHandle): Boolean
+
+  @JvmStatic
+  public external fun ChatConnectionInfo_local_port(connectionInfo: ObjectHandle): Int
 
   @JvmStatic
   public external fun ConnectionManager_Destroy(handle: ObjectHandle): Unit
