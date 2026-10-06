@@ -182,6 +182,7 @@ while [ "${1:-}" != "" ]; do
             ;;
 
         android )
+            # MOLLY: Drop upstream's x86 from the default ABIs; Molly ships no x86 builds.
             android_abis+=(arm64-v8a armeabi-v7a x86_64)
             ;;
         android-arm64 | android-aarch64 )

@@ -24,4 +24,4 @@ swift/Sources/SignalFfi/signal_ffi.h linguist-generated
 swift/Tests/LibSignalClientTests/NativeTestingNice.swift linguist-generated
 
 # MOLLY: Reduce the number of merge conflicts.
-/gradle/verification-metadata.xml merge=union
+/java/gradle/verification-metadata.xml merge=union

@@ -1,4 +1,5 @@
 name: "Lints"
+# MOLLY: Bare workflow name and minimal permissions, matching the fork's workflows; lint pushes on every branch, not only main.
 # This is in a separate job because we have shell scripts scattered across all our targets,
 # *and* some of them have common dependencies.
 

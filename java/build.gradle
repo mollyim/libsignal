@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id "base"
+    // MOLLY: "maven-publish" in place of upstream's "signing" plugin; this fork publishes unsigned artifacts.
     id "maven-publish"
     id "com.diffplug.spotless" version "7.2.1"
 
