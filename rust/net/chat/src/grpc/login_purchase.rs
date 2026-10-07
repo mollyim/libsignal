@@ -112,7 +112,13 @@ fn unsigned_distance(x: u64, y: u64) -> u64 {
     x.max(y) - x.min(y)
 }
 
-const RECEIPT_LEVEL: ReceiptLevel = 300;
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoginReceiptLevel {
+    #[default]
+    Normal = 300,
+    Sandbox = 301,
+}
+
 const EXPIRATION_DAYS: u64 = 5 * 366; // ~ 5 years
 const EXPIRATION_DAYS_LENIENCY: u64 = 7;
 
@@ -135,6 +141,7 @@ impl<T: GrpcServiceProvider> Unauth<T> {
         receipt_credential_request_context: &ReceiptCredentialRequestContext,
         server_params: &ServerPublicParams,
         purchase_time: Timestamp,
+        expected_level: LoginReceiptLevel,
     ) -> Result<ReceiptCredential, RequestError<ReceiptCredentialError>> {
         let mut client = LoginPurchaseClient::new(self.0.service());
         let request = CreateLoginReceiptCredentialRequest {
@@ -166,7 +173,7 @@ impl<T: GrpcServiceProvider> Unauth<T> {
                     .map_err(|ZkGroupVerificationFailure| RequestError::Unexpected {
                         log_safe: UNEXPECTED_CANT_RECV.into(),
                     })?;
-                if out.get_receipt_level() != RECEIPT_LEVEL {
+                if out.get_receipt_level() != expected_level as ReceiptLevel {
                     return Err(RequestError::Unexpected {
                         log_safe: UNEXPECTED_RECEIPT_LEVEL.into(),
                     });
@@ -245,6 +252,7 @@ pub mod test_cases {
         pub receipt_credential_request_context: ReceiptCredentialRequestContext,
         pub server_params: ServerPublicParams,
         pub purchase_time: Timestamp,
+        pub expected_level: LoginReceiptLevel,
     }
     #[allow(clippy::large_enum_variant)]
     pub enum CreateLoginReceiptCredentialOut {
@@ -275,12 +283,13 @@ pub mod test_cases {
                 level,
             )
         };
-        let make_request = |payment_processor| CreateLoginReceiptCredentialArgs {
+        let make_request = |payment_processor, expected_level| CreateLoginReceiptCredentialArgs {
             payment_processor,
             purchase_identifier: purchase_identifier.clone(),
             receipt_credential_request_context: ctx.clone(),
             server_params: server_params.clone(),
             purchase_time,
+            expected_level,
         };
         let make_grpc_request =
             |grpc_payment_processor: GrpcPaymentProvider| CreateLoginReceiptCredentialRequest {
@@ -288,7 +297,7 @@ pub mod test_cases {
                 purchase_identifier: purchase_identifier.clone(),
                 receipt_credential_request: zkgroup::serialize(&ctx.get_request()),
             };
-        let gplay_request = make_request(PaymentProvider::GooglePlayBilling);
+        let gplay_request = make_request(PaymentProvider::GooglePlayBilling, Default::default());
         let gplay_grpc_request = make_grpc_request(GrpcPaymentProvider::GooglePlayBilling);
         let mut test_cases = Vec::new();
         let purchase_time_seconds = purchase_time.epoch_millis() / 1000;
@@ -305,7 +314,7 @@ pub mod test_cases {
             (PaymentProvider::Braintree, GrpcPaymentProvider::Braintree),
         ] {
             let receipt_response = issue_receipt(
-                RECEIPT_LEVEL,
+                LoginReceiptLevel::Normal as ReceiptLevel,
                 zkgroup::Timestamp::from_epoch_seconds(day_align(
                     purchase_time_seconds + (EXPIRATION_DAYS - 2) * SECONDS_PER_DAY,
                 )),
@@ -313,7 +322,7 @@ pub mod test_cases {
             test_cases.push(GrpcTestCase {
                 name: format!("Success {payment_processor:?}"),
                 method: method.into(),
-                request: make_request(payment_processor),
+                request: make_request(payment_processor, Default::default()),
                 request_grpc: make_grpc_request(grpc_payment_processor),
                 response_grpc: CreateLoginReceiptCredentialResponse {
                     response: Some(CreateLoginReceiptCredentialResponseEnum::Result(
@@ -330,9 +339,12 @@ pub mod test_cases {
             });
         }
         // Unexpected Errors
-        {
+        for (requested_level, responded_level) in [
+            (LoginReceiptLevel::Normal, LoginReceiptLevel::Sandbox),
+            (LoginReceiptLevel::Sandbox, LoginReceiptLevel::Normal),
+        ] {
             let receipt_response = issue_receipt(
-                RECEIPT_LEVEL + 1,
+                responded_level as ReceiptLevel,
                 zkgroup::Timestamp::from_epoch_seconds(day_align(
                     purchase_time_seconds + (EXPIRATION_DAYS - 2) * SECONDS_PER_DAY,
                 )),
@@ -340,7 +352,7 @@ pub mod test_cases {
             test_cases.push(GrpcTestCase {
                 name: "Level gets checked".into(),
                 method: method.into(),
-                request: make_request(PaymentProvider::GooglePlayBilling),
+                request: make_request(PaymentProvider::GooglePlayBilling, requested_level),
                 request_grpc: make_grpc_request(GrpcPaymentProvider::GooglePlayBilling),
                 response_grpc: CreateLoginReceiptCredentialResponse {
                     response: Some(CreateLoginReceiptCredentialResponseEnum::Result(
@@ -356,7 +368,7 @@ pub mod test_cases {
         }
         {
             let receipt_response = issue_receipt(
-                RECEIPT_LEVEL,
+                LoginReceiptLevel::Normal as ReceiptLevel,
                 zkgroup::Timestamp::from_epoch_seconds(
                     day_align(purchase_time_seconds + (EXPIRATION_DAYS - 2) * SECONDS_PER_DAY) + 1,
                 ),
@@ -364,7 +376,7 @@ pub mod test_cases {
             test_cases.push(GrpcTestCase {
                 name: "Misaligned expiration".into(),
                 method: method.into(),
-                request: make_request(PaymentProvider::GooglePlayBilling),
+                request: make_request(PaymentProvider::GooglePlayBilling, Default::default()),
                 request_grpc: make_grpc_request(GrpcPaymentProvider::GooglePlayBilling),
                 response_grpc: CreateLoginReceiptCredentialResponse {
                     response: Some(CreateLoginReceiptCredentialResponseEnum::Result(
@@ -384,13 +396,13 @@ pub mod test_cases {
                 + (EXPIRATION_DAYS + EXPIRATION_DAYS_LENIENCY + 1) * SECONDS_PER_DAY,
         ] {
             let receipt_response = issue_receipt(
-                RECEIPT_LEVEL,
+                LoginReceiptLevel::Normal as ReceiptLevel,
                 zkgroup::Timestamp::from_epoch_seconds(expiration),
             );
             test_cases.push(GrpcTestCase {
                 name: format!("Out of bounds expiration {expiration:?}"),
                 method: method.into(),
-                request: make_request(PaymentProvider::GooglePlayBilling),
+                request: make_request(PaymentProvider::GooglePlayBilling, Default::default()),
                 request_grpc: make_grpc_request(GrpcPaymentProvider::GooglePlayBilling),
                 response_grpc: CreateLoginReceiptCredentialResponse {
                     response: Some(CreateLoginReceiptCredentialResponseEnum::Result(
@@ -521,6 +533,32 @@ pub mod test_cases {
                 },
             ),
         });
+        test_cases.push({
+            let receipt_response = issue_receipt(
+                LoginReceiptLevel::Sandbox as ReceiptLevel,
+                zkgroup::Timestamp::from_epoch_seconds(day_align(
+                    purchase_time_seconds + (EXPIRATION_DAYS - 2) * SECONDS_PER_DAY,
+                )),
+            );
+            GrpcTestCase {
+                name: "sandbox level works".into(),
+                method: method.to_string(),
+                request: make_request(PaymentProvider::AppleAppStore, LoginReceiptLevel::Sandbox),
+                request_grpc: make_grpc_request(GrpcPaymentProvider::AppleAppStore),
+                response_grpc: CreateLoginReceiptCredentialResponse {
+                    response: Some(CreateLoginReceiptCredentialResponseEnum::Result(
+                        CreateLoginReceiptCredentialResult {
+                            receipt_credential_response: zkgroup::serialize(&receipt_response),
+                        },
+                    )),
+                },
+                response: CreateLoginReceiptCredentialOut::Success(
+                    server_params
+                        .receive_receipt_credential(&ctx, &receipt_response)
+                        .expect("can generate"),
+                ),
+            }
+        });
         test_cases
     }
 }
@@ -542,6 +580,7 @@ mod tests {
                  receipt_credential_request_context,
                  server_params,
                  purchase_time,
+                 expected_level,
              }| async move {
                 chat.create_login_receipt_credential(
                     payment_processor,
@@ -549,6 +588,7 @@ mod tests {
                     &receipt_credential_request_context,
                     &server_params,
                     purchase_time,
+                    expected_level,
                 )
                 .await
             },

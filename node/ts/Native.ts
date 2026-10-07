@@ -374,6 +374,7 @@ export type ReturnFfiCreateLoginReceiptCredentialArgs = {
   receipt_credential_request_context: Uint8Array<ArrayBuffer>;
   server_params: ReturnFfiServerPublicParamsSerialized;
   purchase_time: Timestamp;
+  expected_level: ReturnFfiLoginReceiptLevel;
 };
 
 export type ReturnFfiCreateLoginReceiptCredentialOut =
@@ -639,6 +640,14 @@ export type ReturnFfiListMfaKeysOut = {
   __type: 0;
   _0: Array<ReturnFfiBridgeConfirmedMfaKey>;
 };
+
+export type ReturnFfiLoginReceiptLevel =
+  | {
+      __type: 0;
+    }
+  | {
+      __type: 1;
+    };
 
 export type ReturnFfiLookUpUsernameLinkArgs = {
   uuid: Uint8Array<ArrayBuffer>;
@@ -1003,6 +1012,14 @@ export type ArgFfiDeviceCapabilityInternal =
     }
   | {
       __type: 6;
+    };
+
+export type ArgFfiLoginReceiptLevel =
+  | {
+      __type: 0;
+    }
+  | {
+      __type: 1;
     };
 
 export type ArgFfiMyRemoteDeriveEnum =
@@ -3897,7 +3914,8 @@ type NativeFunctions = {
     purchase_identifier: string,
     receipt_credential_request_context: Uint8Array<ArrayBuffer>,
     server_params: Wrapper<ServerPublicParams>,
-    purchase_time: Timestamp
+    purchase_time: Timestamp,
+    expected_level: ArgFfiLoginReceiptLevel
   ) => CancellablePromise<Uint8Array<ArrayBuffer>>;
   UnauthenticatedChatConnection_disconnect: (
     asyncRuntime: Wrapper<TokioAsyncContext>,

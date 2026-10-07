@@ -21,6 +21,8 @@ declare module '../Chat' {
   interface UnauthenticatedChatConnection extends UnauthLoginPurchaseService {}
 }
 
+export type LoginReceiptLevel = 'normal' | 'sandbox';
+
 export interface UnauthLoginPurchaseService {
   /**
    * Obtain a ZK receipt credential for a completed one-time login payment.
@@ -46,6 +48,7 @@ export interface UnauthLoginPurchaseService {
       receiptCredentialRequestContext: zkgroup.ReceiptCredentialRequestContext;
       serverParams: zkgroup.ServerPublicParams;
       purchaseTime: Timestamp;
+      expectedLevel: LoginReceiptLevel;
     },
     options?: RequestOptions
   ) => Promise<zkgroup.ReceiptCredential>;
@@ -58,6 +61,7 @@ UnauthenticatedChatConnection.prototype.createLoginReceiptCredential =
       receiptCredentialRequestContext,
       serverParams,
       purchaseTime,
+      expectedLevel,
     },
     options?: RequestOptions
   ): Promise<zkgroup.ReceiptCredential> {
@@ -71,6 +75,7 @@ UnauthenticatedChatConnection.prototype.createLoginReceiptCredential =
         receiptCredentialRequestContext,
         serverParams,
         purchaseTime,
+        expectedLevel,
       }
     );
   };

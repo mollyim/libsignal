@@ -309,6 +309,17 @@ public data class ListMediaResponse(
 */
 
 /*
+// org.signal.libsignal.net.LoginReceiptLevel
+
+public sealed class LoginReceiptLevel {
+  public data object Normal : LoginReceiptLevel()
+
+  public data object Sandbox : LoginReceiptLevel()
+}
+
+*/
+
+/*
 // org.signal.libsignal.net.PaymentProvider
 
 public sealed class PaymentProvider {
@@ -1225,6 +1236,28 @@ public fun DeviceCapabilityInternal.toFfiArgTypeObject(): Object =
       is DeviceCapabilityInternal.ProfilesV2 -> this.toFfiArgType()
       is DeviceCapabilityInternal.UsernameChangeSyncMessage -> this.toFfiArgType()
       is DeviceCapabilityInternal.OptionalPhoneNumber -> this.toFfiArgType()
+    },
+  )
+
+public sealed class LoginReceiptLevel_FfiArgType
+
+@CalledFromNative
+public object LoginReceiptLevel_Normal_FfiArgType : LoginReceiptLevel_FfiArgType()
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.Normal.toFfiArgType(): LoginReceiptLevel_Normal_FfiArgType =
+  LoginReceiptLevel_Normal_FfiArgType
+
+@CalledFromNative
+public object LoginReceiptLevel_Sandbox_FfiArgType : LoginReceiptLevel_FfiArgType()
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.Sandbox.toFfiArgType(): LoginReceiptLevel_Sandbox_FfiArgType =
+  LoginReceiptLevel_Sandbox_FfiArgType
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.toFfiArgTypeObject(): Object =
+  convertToObject(
+    when (this) {
+      is org.signal.libsignal.net.LoginReceiptLevel.Normal -> this.toFfiArgType()
+      is org.signal.libsignal.net.LoginReceiptLevel.Sandbox -> this.toFfiArgType()
     },
   )
 
@@ -2475,6 +2508,7 @@ public object NativeNice {
     receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
     serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
     purchaseTime: java.time.Instant,
+    expectedLevel: org.signal.libsignal.net.LoginReceiptLevel,
   ): CompletableFuture<org.signal.libsignal.zkgroup.receipts.ReceiptCredential> {
     val ffi_chat = identity(chat)
     val ffi_payment_processor = (org.signal.libsignal.net.PaymentProvider::toFfiArgTypeObject)(paymentProcessor)
@@ -2485,6 +2519,7 @@ public object NativeNice {
       )
     val ffi_server_params = identity(serverParams)
     val ffi_purchase_time = (java.time.Instant::toEpochMilli)(purchaseTime)
+    val ffi_expected_level = (org.signal.libsignal.net.LoginReceiptLevel::toFfiArgTypeObject)(expectedLevel)
     val ffiOut =
       NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
         Native.UnauthenticatedChatConnection_create_login_receipt_credential(
@@ -2495,6 +2530,7 @@ public object NativeNice {
           ffi_receipt_credential_request_context,
           ffi_server_params,
           ffi_purchase_time,
+          ffi_expected_level,
         )
       }
     return ffiOut

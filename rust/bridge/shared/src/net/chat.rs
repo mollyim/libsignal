@@ -1309,6 +1309,7 @@ async fn UnauthenticatedChatConnection_create_login_receipt_credential(
     receipt_credential_request_context: ReceiptCredentialRequestContext,
     server_params: BridgeHandleRef<'_, ServerPublicParams>,
     purchase_time: Timestamp,
+    expected_level: login_purchase::LoginReceiptLevel,
 ) -> Result<ReceiptCredential, RequestError<login_purchase::ReceiptCredentialError>> {
     chat.require_grpc()
         .await
@@ -1318,6 +1319,7 @@ async fn UnauthenticatedChatConnection_create_login_receipt_credential(
             &receipt_credential_request_context,
             &server_params,
             purchase_time,
+            expected_level,
         )
         .await
 }

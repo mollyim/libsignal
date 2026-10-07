@@ -16,6 +16,12 @@ import java.time.Instant
 @Deprecated(message = "renamed to ReceiptCredentialException", replaceWith = ReplaceWith("ReceiptCredentialException"))
 public typealias CreateLoginReceiptCredentialException = ReceiptCredentialException
 
+public sealed class LoginReceiptLevel {
+  public data object Normal : LoginReceiptLevel()
+
+  public data object Sandbox : LoginReceiptLevel()
+}
+
 public class UnauthLoginPurchaseService(
   private val connection: UnauthenticatedChatConnection,
 ) {
@@ -39,6 +45,7 @@ public class UnauthLoginPurchaseService(
     receiptCredentialRequestContext: ReceiptCredentialRequestContext,
     serverParams: ServerPublicParams,
     purchaseTime: Instant,
+    expectedLevel: LoginReceiptLevel,
   ): CompletableFuture<RequestResult<ReceiptCredential, ReceiptCredentialException>> =
     try {
       NativeNice
@@ -50,6 +57,7 @@ public class UnauthLoginPurchaseService(
           receiptCredentialRequestContext = receiptCredentialRequestContext,
           serverParams = serverParams,
           purchaseTime = purchaseTime,
+          expectedLevel = expectedLevel,
         ).mapWithCancellation(
           onSuccess = { RequestResult.Success(it) },
           onError = { err -> err.toRequestResult<ReceiptCredentialException>() },

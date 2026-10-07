@@ -3404,6 +3404,7 @@ internal object Native {
     receiptCredentialRequestContext: ByteArray,
     serverParams: SimpleOwner,
     purchaseTime: Long,
+    expectedLevel: Object,
   ): CompletableFuture<ByteArray>
 
   @JvmStatic

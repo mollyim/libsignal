@@ -79,6 +79,7 @@ public data class CreateLoginReceiptCredentialArgs(
   public val receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
   public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
   public val purchaseTime: java.time.Instant,
+  public val expectedLevel: org.signal.libsignal.net.LoginReceiptLevel,
 )
 
 public sealed class CreateLoginReceiptCredentialOut {
@@ -782,6 +783,7 @@ public object CreateLoginReceiptCredentialArgs_ReturnConverter {
     receipt_credential_request_context: Any?,
     server_params: Any?,
     purchase_time: Any?,
+    expected_level: Any?,
   ): Any? =
     CreateLoginReceiptCredentialArgs(
       paymentProcessor =
@@ -801,6 +803,8 @@ public object CreateLoginReceiptCredentialArgs_ReturnConverter {
         ),
       purchaseTime =
         (java.time.Instant::ofEpochMilli)(purchase_time as Long),
+      expectedLevel =
+        downcastFromObject<org.signal.libsignal.net.LoginReceiptLevel>(expected_level as Object),
     )
 }
 
@@ -1337,6 +1341,20 @@ public object ListMfaKeysOut_Success_ReturnConverter {
           downcastFromObject<org.signal.libsignal.internal.BridgeConfirmedMfaKey>(it)
         })(_0 as Array<*>),
     )
+}
+
+public object LoginReceiptLevel_Normal_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.LoginReceiptLevel.Normal
+}
+
+public object LoginReceiptLevel_Sandbox_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.LoginReceiptLevel.Sandbox
 }
 
 public object LookUpUsernameLinkArgs_ReturnConverter {

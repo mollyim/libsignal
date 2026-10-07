@@ -34,6 +34,7 @@ class UnauthLoginPurchaseServiceTest {
             receiptCredentialRequestContext = req.receiptCredentialRequestContext,
             serverParams = ServerPublicParams(req.serverParams.bytes),
             purchaseTime = req.purchaseTime,
+            expectedLevel = req.expectedLevel,
           )
         },
         check = { expected, actual ->

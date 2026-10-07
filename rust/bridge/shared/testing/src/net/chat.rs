@@ -511,6 +511,7 @@ mod remote_derives {
     use libsignal_core::Aci;
     use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
     use libsignal_net_chat::grpc::devices::{DeviceCapability, LinkedDevice};
+    use libsignal_net_chat::grpc::login_purchase::LoginReceiptLevel;
     use libsignal_net_chat::grpc::{login_purchase, subscriptions};
     use libsignal_protocol::Timestamp;
     use uuid::Uuid;
@@ -539,6 +540,7 @@ mod remote_derives {
         pub receipt_credential_request_context: ReceiptCredentialRequestContext,
         pub server_params: ServerPublicParamsSerialized,
         pub purchase_time: Timestamp,
+        pub expected_level: LoginReceiptLevel,
     }
 
     #[derive(BridgedAsValue)]

@@ -14,6 +14,7 @@ import type {
   ArgFfiBridgeMfaVerificationCredential,
   ArgFfiCallQualitySurveyInternal,
   ArgFfiDeviceCapabilityInternal,
+  ArgFfiLoginReceiptLevel,
   ArgFfiMyRemoteDeriveEnum,
   ArgFfiMyRemoteDeriveStruct,
   ArgFfiMySimpleTestEnum,
@@ -75,6 +76,7 @@ import type {
   ReturnFfiListMediaResponse,
   ReturnFfiListMfaKeysArgs,
   ReturnFfiListMfaKeysOut,
+  ReturnFfiLoginReceiptLevel,
   ReturnFfiLookUpUsernameLinkArgs,
   ReturnFfiLookUpUsernameLinkOut,
   ReturnFfiMyRemoteDeriveEnum,
@@ -308,6 +310,7 @@ export type CreateLoginReceiptCredentialArgs = {
   receiptCredentialRequestContext: zkgroup.ReceiptCredentialRequestContext;
   serverParams: ServerPublicParamsSerialized;
   purchaseTime: Timestamp;
+  expectedLevel: LoginReceiptLevel;
 };
 
 export type CreateLoginReceiptCredentialOut =
@@ -498,6 +501,8 @@ export type ListMfaKeysArgs = {
 export type ListMfaKeysOut = {
   success: Array<BridgeConfirmedMfaKey>;
 };
+
+export type LoginReceiptLevel = 'normal' | 'sandbox';
 
 export type LookUpUsernameLinkArgs = {
   uuid: uuid.Uuid;
@@ -1088,6 +1093,7 @@ export function returnConverterCreateLoginReceiptCredentialArgs(
       ffiInput.server_params
     ),
     purchaseTime: identity(ffiInput.purchase_time),
+    expectedLevel: returnConverterLoginReceiptLevel(ffiInput.expected_level),
   };
 }
 
@@ -1554,6 +1560,21 @@ export function returnConverterListMfaKeysOut(
     default:
       ffiInput.__type satisfies never;
       throw new Error('Unknown FFI return enum type for ListMfaKeysOut');
+  }
+}
+
+export function returnConverterLoginReceiptLevel(
+  ffiInput: Native.ReturnFfiLoginReceiptLevel
+): LoginReceiptLevel {
+  switch (ffiInput.__type) {
+    case 0:
+      return 'normal';
+    case 1:
+      return 'sandbox';
+
+    default:
+      ffiInput satisfies never;
+      throw new Error('Unknown FFI return enum type for LoginReceiptLevel');
   }
 }
 
@@ -2225,6 +2246,21 @@ export function argConverterDeviceCapabilityInternal(
 
   niceInput satisfies never;
   throw new Error('Cannot match on DeviceCapabilityInternal argument');
+}
+
+export function argConverterLoginReceiptLevel(
+  niceInput: LoginReceiptLevel
+): Native.ArgFfiLoginReceiptLevel {
+  if (niceInput === 'normal') {
+    return { __type: 0 };
+  }
+
+  if (niceInput === 'sandbox') {
+    return { __type: 1 };
+  }
+
+  niceInput satisfies never;
+  throw new Error('Cannot match on LoginReceiptLevel argument');
 }
 
 export function argConverterMyRemoteDeriveEnum(
@@ -4932,6 +4968,7 @@ export async function UnauthenticatedChatConnection_create_login_receipt_credent
   receiptCredentialRequestContext: receipt_credential_request_context,
   serverParams: server_params,
   purchaseTime: purchase_time,
+  expectedLevel: expected_level,
 }: {
   asyncContext: TokioAsyncContext;
   abortSignal?: AbortSignal;
@@ -4941,6 +4978,7 @@ export async function UnauthenticatedChatConnection_create_login_receipt_credent
   receiptCredentialRequestContext: zkgroup.ReceiptCredentialRequestContext;
   serverParams: Native.Wrapper<Native.ServerPublicParams>;
   purchaseTime: Timestamp;
+  expectedLevel: LoginReceiptLevel;
 }): Promise<zkgroup.ReceiptCredential> {
   return ((x) => new zkgroup.ReceiptCredential(x))(
     await asyncContext.makeCancellable(
@@ -4954,7 +4992,8 @@ export async function UnauthenticatedChatConnection_create_login_receipt_credent
           receipt_credential_request_context
         ),
         identity(server_params),
-        identity(purchase_time)
+        identity(purchase_time),
+        argConverterLoginReceiptLevel(expected_level)
       )
     )
   );

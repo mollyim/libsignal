@@ -1291,6 +1291,18 @@ pub mod remote_derives {
 
     #[derive(BridgedAsValue)]
     #[bridge(
+        remote = libsignal_net_chat::grpc::login_purchase::LoginReceiptLevel,
+        ffi_nice_type = "LoginReceiptLevel",
+        jni_nice_type = "org.signal.libsignal.net.LoginReceiptLevel",
+    )]
+    #[allow(unused)]
+    enum LoginReceiptLevel {
+        Normal,
+        Sandbox,
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(
         remote = libsignal_net_chat::grpc::credentials::AuthCheckResult,
         ffi_nice_type = "AuthCheckResult",
         jni_nice_type = "org.signal.libsignal.net.AuthCheckResult",
