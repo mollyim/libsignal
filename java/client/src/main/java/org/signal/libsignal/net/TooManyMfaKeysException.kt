@@ -16,7 +16,9 @@ import java.io.IOException
 public class TooManyMfaKeysException :
   IOException,
   GenerateTotpKeyError,
-  ConfirmTotpKeyError {
+  ConfirmTotpKeyError,
+  StartWebAuthnRegistrationError,
+  FinishWebAuthnRegistrationError {
   @CalledFromNative
   public constructor(message: String) : super(message) {
   }

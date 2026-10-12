@@ -1,3 +1,11 @@
-v0.102.1
+v0.103.0
 
-- Allow unknown chunks in webp sanitization
+- SPQR: Update to v1.6.0.
+- Renamed OneTimePasswordNotVerified error to MfaNotVerified in preparation for broader use.
+- Key transparency is now available over gRPC
+- New typed APIs:
+    - AuthAccountsService.startWebAuthnRegistration
+    - AuthAccountsService.finishWebAuthnRegistration
+    - AuthAccountsService.startMfaVerification
+    - AuthAccountsService.finishMfaVerification
+- Upgrade {webp,mp4}san to 0.5.4
