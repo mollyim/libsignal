@@ -223,6 +223,33 @@ internal struct ServiceIdConverter: NiceArgConverter, NiceReturnConverter {
     typealias FfiReturn = ServiceIdStorage
 }
 
+internal struct AciConverter: NiceArgConverter, NiceReturnConverter {
+    static func emptyFfiReturn() -> ServiceIdStorage {
+        return ServiceIdConverter.emptyFfiReturn()
+    }
+
+    static func convertArgBorrowed<Result>(
+        _ arg: Aci,
+        _ thunk: (UnsafePointer<ServiceIdStorage>) throws -> Result
+    ) rethrows -> Result {
+        return try arg.withPointerToFixedWidthBinary(thunk)
+    }
+
+    static func convertArg(_ arg: Aci) -> (UnsafePointer<ServiceIdStorage>, NSData?) {
+        return ServiceIdConverter.convertArg(arg)
+    }
+
+    static func convertReturn(consuming value: ServiceIdStorage) throws -> Aci {
+        return try Aci.parseFrom(fixedWidthBinary: value)
+    }
+
+    typealias NiceArg = Aci
+    typealias FfiArg = UnsafePointer<ServiceIdStorage>
+    typealias KeepAlive = NSData
+    typealias NiceReturn = Aci
+    typealias FfiReturn = ServiceIdStorage
+}
+
 internal struct BridgeHandleRefConverter<Ptr: SignalMutPointer, T: NativeHandleOwner<Ptr>>: NiceArgConverter {
     typealias NiceArg = T
     typealias FfiArg = Ptr.ConstPointer
@@ -235,6 +262,21 @@ internal struct BridgeHandleRefConverter<Ptr: SignalMutPointer, T: NativeHandleO
         return try arg.withNativeHandle {
             try thunk($0.const())
         }
+    }
+}
+
+internal struct BridgeHandleMutRefConverter<Ptr: SignalMutPointer, T: NativeHandleOwner<Ptr>>: NiceArgConverter {
+    typealias NiceArg = T
+    typealias FfiArg = Ptr
+    typealias KeepAlive = ()
+
+    static func convertArg(_ arg: NiceArg) -> (FfiArg, KeepAlive?) {
+        // Safe because arg will be kept alive by the caller.
+        return (arg.unsafeNativeHandle, nil)
+    }
+
+    static func convertArgBorrowed<Result>(_ arg: NiceArg, _ thunk: (FfiArg) throws -> Result) rethrows -> Result {
+        return try arg.withNativeHandle(thunk)
     }
 }
 
@@ -275,7 +317,9 @@ internal struct ByteArrayConverter<T: ByteArray>: NiceArgConverter, NiceReturnCo
     }
 }
 
-internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArrayHelper>: NiceArgConverter {
+internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArrayHelper>: NiceArgConverter,
+    NiceReturnConverter
+{
     typealias NiceArg = T
     typealias FfiArg = UnsafePointer<Helper.Ffi>?
     typealias KeepAlive = NSData
@@ -288,6 +332,16 @@ internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArra
         _ thunk: (FfiArg) throws -> Result
     ) rethrows -> Result {
         try FixedByteArrayConverter<Helper>.convertArgBorrowed(arg.serialize(), thunk)
+    }
+
+    typealias FfiReturn = Helper.Ffi
+    typealias NiceReturn = T
+
+    static func convertReturn(consuming value: Helper.Ffi) throws -> T {
+        try T(contents: FixedByteArrayConverter<Helper>.convertReturn(consuming: value))
+    }
+    static func emptyFfiReturn() -> Helper.Ffi {
+        FixedByteArrayConverter<Helper>.emptyFfiReturn()
     }
 }
 

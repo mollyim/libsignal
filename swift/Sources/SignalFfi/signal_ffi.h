@@ -742,6 +742,10 @@ static_assert_64bit(alignof(SignalFfiSyncInputStreamStruct) == 8);
 typedef const SignalFfiSyncInputStreamStruct* SignalType_ConstPointer_SignalFfiSyncInputStreamStruct;
 static_assert_64bit(sizeof(SignalType_ConstPointer_SignalFfiSyncInputStreamStruct) == 8);
 static_assert_64bit(alignof(SignalType_ConstPointer_SignalFfiSyncInputStreamStruct) == 8);
+typedef struct SignalBackupJsonExporter SignalBackupJsonExporter;
+typedef const SignalBackupJsonExporter* SignalType_ConstPointer_SignalBackupJsonExporter;
+static_assert_64bit(sizeof(SignalType_ConstPointer_SignalBackupJsonExporter) == 8);
+static_assert_64bit(alignof(SignalType_ConstPointer_SignalBackupJsonExporter) == 8);
 typedef struct SignalMessageBackupKey SignalMessageBackupKey;
 typedef const SignalMessageBackupKey* SignalType_ConstPointer_SignalMessageBackupKey;
 static_assert_64bit(sizeof(SignalType_ConstPointer_SignalMessageBackupKey) == 8);
@@ -1790,6 +1794,18 @@ static_assert_64bit(alignof(SignalMutPointerValidatingMac) == 8);
 typedef SignalMutPointerValidatingMac* SignalType_MutPointer_SignalMutPointerValidatingMac;
 static_assert_64bit(sizeof(SignalType_MutPointer_SignalMutPointerValidatingMac) == 8);
 static_assert_64bit(alignof(SignalType_MutPointer_SignalMutPointerValidatingMac) == 8);
+typedef SignalBackupJsonExporter* SignalType_MutPointer_SignalBackupJsonExporter;
+static_assert_64bit(sizeof(SignalType_MutPointer_SignalBackupJsonExporter) == 8);
+static_assert_64bit(alignof(SignalType_MutPointer_SignalBackupJsonExporter) == 8);
+typedef struct {
+  SignalBackupJsonExporter* raw;
+} SignalMutPointerBackupJsonExporter;
+static_assert_64bit(offsetof(SignalMutPointerBackupJsonExporter, raw) == 0);
+static_assert_64bit(sizeof(SignalMutPointerBackupJsonExporter) == 8);
+static_assert_64bit(alignof(SignalMutPointerBackupJsonExporter) == 8);
+typedef SignalMutPointerBackupJsonExporter* SignalType_MutPointer_SignalMutPointerBackupJsonExporter;
+static_assert_64bit(sizeof(SignalType_MutPointer_SignalMutPointerBackupJsonExporter) == 8);
+static_assert_64bit(alignof(SignalType_MutPointer_SignalMutPointerBackupJsonExporter) == 8);
 typedef SignalMessageBackupKey* SignalType_MutPointer_SignalMessageBackupKey;
 static_assert_64bit(sizeof(SignalType_MutPointer_SignalMessageBackupKey) == 8);
 static_assert_64bit(alignof(SignalType_MutPointer_SignalMessageBackupKey) == 8);
@@ -2257,6 +2273,9 @@ static_assert_64bit(alignof(SignalOwnedBufferOfFfiRegisterResponseBadge) == 8);
 typedef SignalOwnedBufferOfFfiRegisterResponseBadge* SignalType_MutPointer_SignalOwnedBufferOfFfiRegisterResponseBadge;
 static_assert_64bit(sizeof(SignalType_MutPointer_SignalOwnedBufferOfFfiRegisterResponseBadge) == 8);
 static_assert_64bit(alignof(SignalType_MutPointer_SignalOwnedBufferOfFfiRegisterResponseBadge) == 8);
+typedef SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr* SignalType_MutPointer_SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr;
+static_assert_64bit(sizeof(SignalType_MutPointer_SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr) == 8);
+static_assert_64bit(alignof(SignalType_MutPointer_SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr) == 8);
 typedef struct {
   const int8_t* first;
   bool second;
@@ -2312,6 +2331,22 @@ static_assert_64bit(alignof(SignalType_MutPointer_SignalPairOfPairOfCStringPtrOw
 typedef SignalUuid* SignalType_MutPointer_SignalUuid;
 static_assert_64bit(sizeof(SignalType_MutPointer_SignalUuid) == 8);
 static_assert_64bit(alignof(SignalType_MutPointer_SignalUuid) == 8);
+typedef void (*SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void)(SignalType_MutPointer_SignalFfiError, SignalType_ConstPointer_FixedArray153_uint8_t, SignalType_ConstPointer_void);
+static_assert_64bit(sizeof(SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void) == 8);
+static_assert_64bit(alignof(SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void) == 8);
+typedef struct {
+  SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void complete;
+  const void* context;
+  uint64_t cancellation_id;
+} SignalCPromisec_uchar153;
+static_assert_64bit(offsetof(SignalCPromisec_uchar153, complete) == 0);
+static_assert_64bit(offsetof(SignalCPromisec_uchar153, context) == 8);
+static_assert_64bit(offsetof(SignalCPromisec_uchar153, cancellation_id) == 16);
+static_assert_64bit(sizeof(SignalCPromisec_uchar153) == 24);
+static_assert_64bit(alignof(SignalCPromisec_uchar153) == 8);
+typedef SignalCPromisec_uchar153* SignalType_MutPointer_SignalCPromisec_uchar153;
+static_assert_64bit(sizeof(SignalType_MutPointer_SignalCPromisec_uchar153) == 8);
+static_assert_64bit(alignof(SignalType_MutPointer_SignalCPromisec_uchar153) == 8);
 typedef void (*SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray32_uint8_t_ConstPointer_void)(SignalType_MutPointer_SignalFfiError, SignalType_ConstPointer_FixedArray32_uint8_t, SignalType_ConstPointer_void);
 static_assert_64bit(sizeof(SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray32_uint8_t_ConstPointer_void) == 8);
 static_assert_64bit(alignof(SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray32_uint8_t_ConstPointer_void) == 8);
@@ -3089,6 +3124,12 @@ static_assert_64bit(offsetof(SignalConstPointerFfiSyncInputStreamStruct, raw) ==
 static_assert_64bit(sizeof(SignalConstPointerFfiSyncInputStreamStruct) == 8);
 static_assert_64bit(alignof(SignalConstPointerFfiSyncInputStreamStruct) == 8);
 typedef struct {
+  const SignalBackupJsonExporter* raw;
+} SignalConstPointerBackupJsonExporter;
+static_assert_64bit(offsetof(SignalConstPointerBackupJsonExporter, raw) == 0);
+static_assert_64bit(sizeof(SignalConstPointerBackupJsonExporter) == 8);
+static_assert_64bit(alignof(SignalConstPointerBackupJsonExporter) == 8);
+typedef struct {
   const SignalMessageBackupKey* raw;
 } SignalConstPointerMessageBackupKey;
 static_assert_64bit(offsetof(SignalConstPointerMessageBackupKey, raw) == 0);
@@ -3568,6 +3609,7 @@ typedef enum {
   SignalErrorCodeMfaNotVerified = 236,
   SignalErrorCodeMfaKeyNotFound = 237,
   SignalErrorCodeWebAuthnRegistrationUnsuccessful = 238,
+  SignalErrorCodeProfileNotFound = 239,
 } SignalErrorCode;
 static_assert_64bit(sizeof(SignalErrorCode) == 4);
 static_assert_64bit(alignof(SignalErrorCode) == 4);
@@ -3658,6 +3700,12 @@ static_assert_64bit(offsetof(SignalCallQualitySurveyInternalFfiArg, call_telemet
 static_assert_64bit(offsetof(SignalCallQualitySurveyInternalFfiArg, call_id_hash) == 192);
 static_assert_64bit(sizeof(SignalCallQualitySurveyInternalFfiArg) == 216);
 static_assert_64bit(alignof(SignalCallQualitySurveyInternalFfiArg) == 8);
+typedef enum {
+  SignalLoginReceiptLevelFfiArgNormal,
+  SignalLoginReceiptLevelFfiArgSandbox,
+} SignalLoginReceiptLevelFfiArg;
+static_assert_64bit(sizeof(SignalLoginReceiptLevelFfiArg) == 4);
+static_assert_64bit(alignof(SignalLoginReceiptLevelFfiArg) == 4);
 typedef enum {
   SignalPaymentProviderFfiArgGooglePlayBilling,
   SignalPaymentProviderFfiArgAppleAppStore,
@@ -3976,6 +4024,14 @@ SignalFfiError* signal_authenticated_chat_connection_remove_mfa_key(
   SignalConstPointerAuthenticatedChatConnection chat,
   int32_t key_id
 );
+SignalFfiError* signal_authenticated_chat_connection_report_message(
+  SignalCPromisebool* promise,
+  SignalConstPointerTokioAsyncContext async_runtime,
+  SignalConstPointerAuthenticatedChatConnection chat,
+  const SignalType_FixedArray17_uint8_t* source,
+  SignalUuid message_guid,
+  SignalBorrowedBuffer report_spam_token
+);
 SignalFfiError* signal_authenticated_chat_connection_reserve_username_hash(
   SignalCPromisec_uchar32* promise,
   SignalConstPointerTokioAsyncContext async_runtime,
@@ -4243,6 +4299,26 @@ SignalFfiError* signal_backup_auth_credential_request_issue_deterministic(
 SignalFfiError* signal_backup_auth_credential_response_check_valid_contents(
   SignalBorrowedBuffer response_bytes
 );
+SignalFfiError* signal_backup_json_exporter_destroy(
+  SignalMutPointerBackupJsonExporter p
+);
+SignalFfiError* signal_backup_json_exporter_export_frames(
+  SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr* out,
+  SignalMutPointerBackupJsonExporter exporter,
+  SignalBorrowedBuffer frames
+);
+SignalFfiError* signal_backup_json_exporter_finish(
+  SignalMutPointerBackupJsonExporter exporter
+);
+SignalFfiError* signal_backup_json_exporter_get_initial_chunk(
+  SignalCStringPtr* out,
+  SignalConstPointerBackupJsonExporter exporter
+);
+SignalFfiError* signal_backup_json_exporter_new(
+  SignalMutPointerBackupJsonExporter* out,
+  SignalBorrowedBuffer backup_info,
+  bool should_validate
+);
 SignalFfiError* signal_backup_key_derive_backup_id(
   SignalType_FixedArray16_uint8_t* out,
   const SignalType_FixedArray32_uint8_t* backup_key,
@@ -4415,6 +4491,10 @@ SignalFfiError* signal_chat_connection_info_destroy(
 );
 SignalFfiError* signal_chat_connection_info_ip_version(
   uint8_t* out,
+  SignalConstPointerChatConnectionInfo connection_info
+);
+SignalFfiError* signal_chat_connection_info_is_direct(
+  bool* out,
   SignalConstPointerChatConnectionInfo connection_info
 );
 SignalFfiError* signal_chat_connection_info_local_port(
@@ -6720,7 +6800,8 @@ SignalFfiError* signal_unauthenticated_chat_connection_create_login_receipt_cred
   const int8_t* purchase_identifier,
   SignalBorrowedBuffer receipt_credential_request_context,
   SignalConstPointerServerPublicParams server_params,
-  uint64_t purchase_time
+  uint64_t purchase_time,
+  SignalLoginReceiptLevelFfiArg expected_level
 );
 SignalFfiError* signal_unauthenticated_chat_connection_destroy(
   SignalMutPointerUnauthenticatedChatConnection p
@@ -6752,6 +6833,21 @@ SignalFfiError* signal_unauthenticated_chat_connection_get_pre_keys_unrestricted
   SignalConstPointerUnauthenticatedChatConnection chat,
   const SignalType_FixedArray17_uint8_t* target,
   int32_t device
+);
+SignalFfiError* signal_unauthenticated_chat_connection_get_profile_key_credential(
+  SignalCPromisec_uchar153* promise,
+  SignalConstPointerTokioAsyncContext async_runtime,
+  SignalConstPointerUnauthenticatedChatConnection chat,
+  const SignalType_FixedArray473_uint8_t* profile_key_request_context,
+  SignalConstPointerServerPublicParams server_params
+);
+SignalFfiError* signal_unauthenticated_chat_connection_get_subscription_receipt_credential(
+  SignalCPromiseOwnedBuffer* promise,
+  SignalConstPointerTokioAsyncContext async_runtime,
+  SignalConstPointerUnauthenticatedChatConnection chat,
+  const SignalType_FixedArray32_uint8_t* subscriber_id,
+  SignalBorrowedBuffer receipt_credential_request_context,
+  SignalConstPointerServerPublicParams server_params
 );
 SignalFfiError* signal_unauthenticated_chat_connection_info(
   SignalMutPointerChatConnectionInfo* out,

@@ -1,11 +1,6 @@
-v0.103.0
+v0.105.0
 
-- SPQR: Update to v1.6.0.
-- Renamed OneTimePasswordNotVerified error to MfaNotVerified in preparation for broader use.
-- Key transparency is now available over gRPC
-- New typed APIs:
-    - AuthAccountsService.startWebAuthnRegistration
-    - AuthAccountsService.finishWebAuthnRegistration
-    - AuthAccountsService.startMfaVerification
-    - AuthAccountsService.finishMfaVerification
-- Upgrade {webp,mp4}san to 0.5.4
+- Net: `ChatConnection.info()` now reports whether the connection is direct (`isDirect`), as opposed to going through a reflector or a proxy.
+- Java: Connection info is now also available in Java.
+- Typed APIs
+  - Add `expectedLevel` argument to `createLoginReceiptCredential()`

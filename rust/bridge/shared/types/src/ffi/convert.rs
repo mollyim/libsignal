@@ -308,13 +308,13 @@ impl NiceArgConverter for Vec<u8> {
     }
 }
 
-impl ArgTypeInfoBase for Vec<&'_ [u8]> {
+impl ArgTypeInfoBase for &'_ [&'_ [u8]] {
     type ArgType = BorrowedSliceOf<BorrowedSliceOf<u8>>;
 }
-impl<'a> ArgTypeInfo<'a> for Vec<&'a [u8]> {
+impl<'a> ArgTypeInfo<'a> for &'a [&'a [u8]] {
     type StoredType = Vec<&'a [u8]>;
 
-    fn borrow(foreign: Self::ArgType) -> SignalFfiResult<Self> {
+    fn borrow(foreign: Self::ArgType) -> SignalFfiResult<Self::StoredType> {
         let slices = unsafe { foreign.as_slice()? };
         slices
             .iter()
@@ -335,7 +335,7 @@ impl<'a> ArgTypeInfo<'a> for Vec<&'a [u8]> {
     }
 
     fn load_from(stored: &'a mut Self::StoredType) -> Self {
-        std::mem::take(stored)
+        stored
     }
 }
 
@@ -591,6 +591,38 @@ impl ResultTypeInfo for Option<uuid::Uuid> {
     }
 }
 
+/// Implements the nice converters for `ServiceId` and its narrower forms, which all cross the
+/// bridge as Service-Id-FixedWidthBinary. `$swift` is the Swift type the app sees; its converter is
+/// hand-written in NiceBridgingUtils.swift as `<$swift>Converter`.
+macro_rules! nice_service_id_arg_converter {
+    ($typ:ty, $swift:expr) => {
+        #[cfg(feature = "metadata")]
+        impl NiceArgConverter for $typ {
+            fn register_swift_arg_converter(_ctx: &mut SwiftMetadataContext) -> SwiftArgConverter {
+                SwiftArgConverter {
+                    nice_type: $swift.into(),
+                    converter_type: format!("{}Converter", $swift),
+                }
+            }
+        }
+    };
+}
+macro_rules! nice_service_id_result_converter {
+    ($typ:ty, $swift:expr) => {
+        #[cfg(feature = "metadata")]
+        impl NiceResultConverter for $typ {
+            fn register_swift_result_converter(
+                _ctx: &mut SwiftMetadataContext,
+            ) -> SwiftReturnConverter {
+                SwiftReturnConverter {
+                    nice_type: $swift.into(),
+                    converter_type: format!("{}Converter", $swift),
+                }
+            }
+        }
+    };
+}
+
 impl SimpleArgTypeInfo for libsignal_protocol::ServiceId {
     type ArgType = *const libsignal_protocol::ServiceIdFixedWidthBinaryBytes;
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -606,15 +638,7 @@ impl SimpleArgTypeInfo for libsignal_protocol::ServiceId {
         }
     }
 }
-#[cfg(feature = "metadata")]
-impl NiceArgConverter for ServiceId {
-    fn register_swift_arg_converter(_ctx: &mut SwiftMetadataContext) -> SwiftArgConverter {
-        SwiftArgConverter {
-            nice_type: "ServiceId".to_string(),
-            converter_type: "ServiceIdConverter".to_string(),
-        }
-    }
-}
+nice_service_id_arg_converter!(ServiceId, "ServiceId");
 
 impl ResultTypeInfo for libsignal_protocol::ServiceId {
     type ResultType = libsignal_protocol::ServiceIdFixedWidthBinaryBytes;
@@ -622,15 +646,7 @@ impl ResultTypeInfo for libsignal_protocol::ServiceId {
         Ok(self.service_id_fixed_width_binary())
     }
 }
-#[cfg(feature = "metadata")]
-impl NiceResultConverter for ServiceId {
-    fn register_swift_result_converter(_ctx: &mut SwiftMetadataContext) -> SwiftReturnConverter {
-        SwiftReturnConverter {
-            nice_type: "ServiceId".to_string(),
-            converter_type: "ServiceIdConverter".to_string(),
-        }
-    }
-}
+nice_service_id_result_converter!(ServiceId, "ServiceId");
 
 impl SimpleArgTypeInfo for libsignal_protocol::Aci {
     type ArgType = <libsignal_protocol::ServiceId as SimpleArgTypeInfo>::ArgType;
@@ -640,6 +656,7 @@ impl SimpleArgTypeInfo for libsignal_protocol::Aci {
             .map_err(|_| IllegalArgumentError::new("not an ACI").into())
     }
 }
+nice_service_id_arg_converter!(Aci, "Aci");
 
 impl ResultTypeInfo for libsignal_protocol::Aci {
     type ResultType = libsignal_protocol::ServiceIdFixedWidthBinaryBytes;
@@ -647,6 +664,7 @@ impl ResultTypeInfo for libsignal_protocol::Aci {
         libsignal_protocol::ServiceId::from(self).convert_into()
     }
 }
+nice_service_id_result_converter!(Aci, "Aci");
 
 impl SimpleArgTypeInfo for libsignal_protocol::Pni {
     type ArgType = <libsignal_protocol::ServiceId as SimpleArgTypeInfo>::ArgType;
@@ -1718,6 +1736,23 @@ where
         Ok(result.as_slice().try_into().expect("wrong serialized size"))
     }
 }
+#[cfg(feature = "metadata")]
+impl<T> NiceResultConverter for Serialized<T>
+where
+    T: FixedLengthBincodeSerializable,
+{
+    fn register_swift_result_converter(ctx: &mut SwiftMetadataContext) -> SwiftReturnConverter {
+        ctx.fixed_byte_array_lengths.insert(T::Array::LEN);
+        let name = T::name();
+        SwiftReturnConverter {
+            converter_type: format!(
+                "FixedLengthSerializedConverter<{name}, {}>",
+                names::fixed_byte_array_helper(T::Array::LEN)
+            ),
+            nice_type: name,
+        }
+    }
+}
 
 impl ResultTypeInfo for DeviceId {
     type ResultType = u8;
@@ -1780,6 +1815,23 @@ impl<A: NiceResultConverter + ResultTypeInfo, B: NiceResultConverter + ResultTyp
                 <(A, B) as ResultTypeInfo>::ResultType::register_c_type(ctx).swift_name()
             ),
         }
+    }
+}
+
+impl<A: ResultTypeInfo, B: ResultTypeInfo> ResultTypeInfo for Vec<(A, B)> {
+    type ResultType = <BridgeVec<(A, B)> as ResultTypeInfo>::ResultType;
+
+    fn convert_into(self) -> SignalFfiResult<Self::ResultType> {
+        BridgeVec(self).convert_into()
+    }
+}
+
+#[cfg(feature = "metadata")]
+impl<A: NiceResultConverter + ResultTypeInfo, B: NiceResultConverter + ResultTypeInfo>
+    NiceResultConverter for Vec<(A, B)>
+{
+    fn register_swift_result_converter(ctx: &mut SwiftMetadataContext) -> SwiftReturnConverter {
+        <BridgeVec<(A, B)>>::register_swift_result_converter(ctx)
     }
 }
 
@@ -2031,6 +2083,21 @@ macro_rules! ffi_bridge_as_handle {
                 }
             }
             #[cfg(feature = "metadata")]
+            impl $crate::ffi::NiceArgConverter for &mut $typ {
+                fn register_swift_arg_converter(
+                    _ctx: &mut $crate::metadata::ffi::SwiftMetadataContext
+                ) -> $crate::metadata::ffi::SwiftArgConverter {
+                    $crate::metadata::ffi::SwiftArgConverter {
+                        nice_type: $swift_type.into(),
+                        converter_type: format!(
+                            "BridgeHandleMutRefConverter<SignalMutPointer{}, {}>",
+                            stringify!($typ),
+                            $swift_type,
+                        ),
+                    }
+                }
+            }
+            #[cfg(feature = "metadata")]
             impl $crate::ffi::NiceResultConverter for $typ {
                 fn register_swift_result_converter(
                     _ctx: &mut $crate::metadata::ffi::SwiftMetadataContext
@@ -2203,7 +2270,7 @@ macro_rules! simple_optional {
 }
 simple_optional!(f32);
 simple_optional!(Vec<u8>);
-return_optional!(libsignal_net_chat::grpc::login_purchase::ChargeFailure);
+return_optional!(libsignal_net_chat::api::purchase::ChargeFailure);
 return_optional!(crate::net::chat::remote_derives::BridgeWebAuthnAuthenticationParameters);
 
 #[cfg(test)]
