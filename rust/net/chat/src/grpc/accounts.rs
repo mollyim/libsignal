@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+use std::collections::HashSet;
 use std::convert::Infallible;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use libsignal_account_keys::{EncryptedMfaMetadata, InvalidMfaMetadata, MfaMetadata, SvrKey};
 use libsignal_core::LogSafeDisplay;
@@ -16,12 +17,13 @@ use libsignal_net_grpc::proto::chat::account::{
     ConfirmTotpKeyResponse, DeleteAccountRequest, DeleteAccountResponse,
     FinishMfaVerificationRequest, FinishMfaVerificationResponse, FinishWebAuthnRegistrationRequest,
     FinishWebAuthnRegistrationResponse, GenerateTotpKeyRequest, GenerateTotpKeyResponse,
-    ListMfaKeysRequest, ListMfaKeysResponse, RemoveMfaKeyRequest, RemoveMfaKeyResponse,
-    SetDiscoverableByPhoneNumberRequest, SetDiscoverableByPhoneNumberResponse,
-    SetMfaKeyMetadataRequest, SetMfaKeyMetadataResponse, SetRegistrationLockRequest,
-    SetRegistrationLockResponse, SetRegistrationRecoveryPasswordRequest,
-    SetRegistrationRecoveryPasswordResponse, StartMfaVerificationRequest,
-    StartMfaVerificationResponse as StartMfaVerificationResponseProto,
+    GetCapabilitiesRequest, GetCapabilitiesResponse, GetEntitlementsRequest,
+    GetEntitlementsResponse, ListMfaKeysRequest, ListMfaKeysResponse, RemoveMfaKeyRequest,
+    RemoveMfaKeyResponse, SetDiscoverableByPhoneNumberRequest,
+    SetDiscoverableByPhoneNumberResponse, SetMfaKeyMetadataRequest, SetMfaKeyMetadataResponse,
+    SetRegistrationLockRequest, SetRegistrationLockResponse,
+    SetRegistrationRecoveryPasswordRequest, SetRegistrationRecoveryPasswordResponse,
+    StartMfaVerificationRequest, StartMfaVerificationResponse as StartMfaVerificationResponseProto,
     StartWebAuthnRegistrationRequest, StartWebAuthnRegistrationResponse,
     TotpParameters as GrpcTotpParameters, confirm_totp_key_response,
     finish_web_authn_registration_response, generate_totp_key_response, list_mfa_keys_response,
@@ -30,6 +32,7 @@ use libsignal_net_grpc::proto::chat::account::{
 use libsignal_net_grpc::proto::chat::errors;
 
 use crate::api::{Auth, RequestError};
+use crate::grpc::devices::DeviceCapability;
 use crate::grpc::{GrpcServiceProvider, GrpcTestCase, log_and_send};
 use crate::logging::Redact;
 
@@ -220,6 +223,80 @@ impl From<MfaVerificationCredential>
 /// The provided verification was not accepted.
 pub struct MfaVerificationFailed;
 impl LogSafeDisplay for MfaVerificationFailed {}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct AccountEntitlements {
+    pub badges: Vec<BadgeEntitlement>,
+    pub backup: Option<BackupEntitlement>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct BadgeEntitlement {
+    // The id of the badge the account is entitled to. Metadata to display for
+    // badges may be obtained by cross-referencing badge ids with
+    // RemoteConfiguration.GetBadges.
+    pub badge_id: String,
+    // When the badge expires
+    pub expiration: SystemTime,
+    // Whether the badge is currently configured to be visible
+    pub visible: bool,
+}
+
+impl TryFrom<libsignal_net_grpc::proto::chat::account::get_entitlements_response::BadgeEntitlement>
+    for BadgeEntitlement
+{
+    type Error = RequestError<Infallible>;
+
+    fn try_from(
+        value: libsignal_net_grpc::proto::chat::account::get_entitlements_response::BadgeEntitlement,
+    ) -> Result<Self, Self::Error> {
+        let libsignal_net_grpc::proto::chat::account::get_entitlements_response::BadgeEntitlement {
+            badge_id,
+            expiration_epoch_seconds,
+            visible,
+        } = value;
+        if badge_id.is_empty() {
+            return Err(RequestError::Unexpected {
+                log_safe: "missing badge_id".to_owned(),
+            });
+        }
+        Ok(Self {
+            badge_id,
+            expiration: SystemTime::UNIX_EPOCH + Duration::from_secs(expiration_epoch_seconds),
+            visible,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+pub struct BackupEntitlement {
+    // The backup level of the account
+    pub level: zkgroup::ReceiptLevel,
+    // When the backup entitlement expires
+    pub expiration: SystemTime,
+}
+
+impl TryFrom<libsignal_net_grpc::proto::chat::account::get_entitlements_response::BackupEntitlement>
+    for BackupEntitlement
+{
+    type Error = RequestError<Infallible>;
+
+    fn try_from(
+        value: libsignal_net_grpc::proto::chat::account::get_entitlements_response::BackupEntitlement,
+    ) -> Result<Self, Self::Error> {
+        let libsignal_net_grpc::proto::chat::account::get_entitlements_response::BackupEntitlement {
+            level,
+            expiration_epoch_seconds,
+        } = value;
+        Ok(Self {
+            level,
+            expiration: SystemTime::UNIX_EPOCH + Duration::from_secs(expiration_epoch_seconds),
+        })
+    }
+}
 
 fn parse_mfa_key_id<E>(key_id: u32) -> Result<MfaKeyId, RequestError<E>> {
     MfaKeyId::try_from(key_id).map_err(|e| RequestError::Unexpected {
@@ -415,6 +492,20 @@ impl std::fmt::Display for Redact<RemoveMfaKeyRequest> {
         f.debug_struct("RemoveMfaKeyRequest")
             .field("key_id", key_id)
             .finish()
+    }
+}
+
+impl std::fmt::Display for Redact<GetEntitlementsRequest> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self(GetEntitlementsRequest {}) = self;
+        f.debug_struct("GetEntitlementsRequest").finish()
+    }
+}
+
+impl std::fmt::Display for Redact<GetCapabilitiesRequest> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self(GetCapabilitiesRequest {}) = self;
+        f.debug_struct("GetCapabilitiesRequest").finish()
     }
 }
 
@@ -929,6 +1020,62 @@ impl<T: GrpcServiceProvider> Auth<T> {
                 .into_inner();
         Ok(())
     }
+
+    pub async fn get_entitlements(&self) -> Result<AccountEntitlements, RequestError<Infallible>> {
+        let mut client = AccountsClient::new(self.0.service());
+        let request = GetEntitlementsRequest {};
+        let desc = Redact(&request).to_string();
+        let GetEntitlementsResponse { badges, backup } =
+            log_and_send(Self::LOG_TAG, &desc, || client.get_entitlements(request))
+                .await?
+                .into_inner();
+        Ok(AccountEntitlements {
+            badges: badges
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            backup: backup.map(TryInto::try_into).transpose()?,
+        })
+    }
+
+    /// Gets the capabilities of the authenticated account.
+    ///
+    /// Capabilities that are not recognized are filtered out.
+    pub async fn get_capabilities(
+        &self,
+    ) -> Result<HashSet<DeviceCapability>, RequestError<Infallible>> {
+        let mut client = AccountsClient::new(self.0.service());
+        let request = GetCapabilitiesRequest {};
+        let desc = Redact(&request).to_string();
+        let GetCapabilitiesResponse { capabilities } =
+            log_and_send(Self::LOG_TAG, &desc, || client.get_capabilities(request))
+                .await?
+                .into_inner();
+        let capabilities = capabilities.ok_or_else(|| RequestError::Unexpected {
+            log_safe: "missing capabilities".to_owned(),
+        })?;
+        // prost already filters out values that aren't in the proto enum:
+        // https://github.com/tokio-rs/prost/blob/v0.14.4/prost-derive/src/field/scalar.rs#L328-L344
+        let converted = capabilities
+            .capabilities()
+            .filter_map(|capability| DeviceCapability::try_from(capability).ok())
+            .collect::<HashSet<_>>();
+        if capabilities.capabilities.len() != converted.len() {
+            use libsignal_net_grpc::proto::chat::common::DeviceCapability as GrpcDeviceCapability;
+            let server_values = capabilities
+                .capabilities
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let supported_values = converted
+                .iter()
+                .map(|x| GrpcDeviceCapability::from(*x) as i32)
+                .collect::<HashSet<_>>();
+            let diff = server_values.difference(&supported_values);
+            log::warn!("Unsupported capabilities in server response: {:?}", diff);
+        }
+        Ok(converted)
+    }
 }
 
 // Not cfg(test) so it can be accessed via bridging tests.
@@ -936,8 +1083,10 @@ impl<T: GrpcServiceProvider> Auth<T> {
 pub mod test_cases {
     use libsignal_account_keys::MFA_METADATA_CIPHERTEXT_LEN;
     use libsignal_net_grpc::proto::chat::account::{
-        finish_mfa_verification_request, start_mfa_verification_response,
+        Capabilities, finish_mfa_verification_request, get_entitlements_response,
+        start_mfa_verification_response,
     };
+    use libsignal_net_grpc::proto::chat::common::DeviceCapability as GrpcDeviceCapability;
     use libsignal_protocol::Timestamp;
 
     use super::*;
@@ -1822,6 +1971,162 @@ pub mod test_cases {
             response: RemoveMfaKeyOut::Success,
         }]
     }
+
+    pub enum GetEntitlementsOut {
+        Success(AccountEntitlements),
+        Malformed,
+    }
+
+    pub fn get_entitlements_test_cases()
+    -> Vec<GrpcTestCase<(), GetEntitlementsRequest, GetEntitlementsResponse, GetEntitlementsOut>>
+    {
+        let method = "/org.signal.chat.account.Accounts/GetEntitlements";
+        vec![
+            GrpcTestCase {
+                name: "success".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetEntitlementsRequest {},
+                response_grpc: GetEntitlementsResponse {
+                    badges: vec![
+                        get_entitlements_response::BadgeEntitlement {
+                            badge_id: "sprout".to_string(),
+                            expiration_epoch_seconds: 1800000000, // not day-aligned
+                            visible: false,
+                        },
+                        get_entitlements_response::BadgeEntitlement {
+                            badge_id: "gift".to_string(),
+                            expiration_epoch_seconds: 1800057600,
+                            visible: true,
+                        },
+                    ],
+                    backup: Some(get_entitlements_response::BackupEntitlement {
+                        level: 200,
+                        expiration_epoch_seconds: 1800000000,
+                    }),
+                },
+                response: GetEntitlementsOut::Success(AccountEntitlements {
+                    badges: vec![
+                        BadgeEntitlement {
+                            badge_id: "sprout".to_string(),
+                            expiration: SystemTime::UNIX_EPOCH + Duration::from_secs(1800000000),
+                            visible: false,
+                        },
+                        BadgeEntitlement {
+                            badge_id: "gift".to_string(),
+                            expiration: SystemTime::UNIX_EPOCH + Duration::from_secs(1800057600),
+                            visible: true,
+                        },
+                    ],
+                    backup: Some(BackupEntitlement {
+                        level: 200,
+                        expiration: SystemTime::UNIX_EPOCH + Duration::from_secs(1800000000),
+                    }),
+                }),
+            },
+            GrpcTestCase {
+                name: "no entitlements".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetEntitlementsRequest {},
+                response_grpc: GetEntitlementsResponse {
+                    badges: vec![],
+                    backup: None,
+                },
+                response: GetEntitlementsOut::Success(AccountEntitlements {
+                    badges: vec![],
+                    backup: None,
+                }),
+            },
+            GrpcTestCase {
+                name: "missing badge_id".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetEntitlementsRequest {},
+                response_grpc: GetEntitlementsResponse {
+                    badges: vec![get_entitlements_response::BadgeEntitlement {
+                        badge_id: String::new(),
+                        expiration_epoch_seconds: 1800000000,
+                        visible: true,
+                    }],
+                    backup: None,
+                },
+                response: GetEntitlementsOut::Malformed,
+            },
+        ]
+    }
+
+    pub enum GetCapabilitiesOut {
+        Success(Vec<DeviceCapability>),
+        Malformed,
+    }
+
+    pub fn get_capabilities_test_cases()
+    -> Vec<GrpcTestCase<(), GetCapabilitiesRequest, GetCapabilitiesResponse, GetCapabilitiesOut>>
+    {
+        let method = "/org.signal.chat.account.Accounts/GetCapabilities";
+        vec![
+            GrpcTestCase {
+                name: "success".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetCapabilitiesRequest {},
+                response_grpc: GetCapabilitiesResponse {
+                    capabilities: Some(Capabilities {
+                        capabilities: vec![
+                            GrpcDeviceCapability::SparsePostQuantumRatchet.into(),
+                            GrpcDeviceCapability::AttachmentBackfill.into(),
+                            GrpcDeviceCapability::ProfilesV2.into(),
+                        ],
+                    }),
+                },
+                response: GetCapabilitiesOut::Success(vec![
+                    DeviceCapability::SparsePostQuantumRatchet,
+                    DeviceCapability::AttachmentBackfill,
+                    DeviceCapability::ProfilesV2,
+                ]),
+            },
+            GrpcTestCase {
+                name: "no capabilities".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetCapabilitiesRequest {},
+                response_grpc: GetCapabilitiesResponse {
+                    capabilities: Some(Capabilities {
+                        capabilities: vec![],
+                    }),
+                },
+                response: GetCapabilitiesOut::Success(vec![]),
+            },
+            GrpcTestCase {
+                name: "unrecognized capabilities are omitted".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetCapabilitiesRequest {},
+                response_grpc: GetCapabilitiesResponse {
+                    capabilities: Some(Capabilities {
+                        capabilities: vec![
+                            GrpcDeviceCapability::Unspecified.into(),
+                            GrpcDeviceCapability::UsernameChangeSyncMessage.into(),
+                            // An unknown capability
+                            1000,
+                        ],
+                    }),
+                },
+                response: GetCapabilitiesOut::Success(vec![
+                    DeviceCapability::UsernameChangeSyncMessage,
+                ]),
+            },
+            GrpcTestCase {
+                name: "missing capabilities".to_string(),
+                method: method.to_string(),
+                request: (),
+                request_grpc: GetCapabilitiesRequest {},
+                response_grpc: GetCapabilitiesResponse { capabilities: None },
+                response: GetCapabilitiesOut::Malformed,
+            },
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -2500,6 +2805,40 @@ mod test {
                         DisconnectedError::Transport { .. }
                     ))
                 )
+            },
+        );
+    }
+
+    #[test]
+    fn test_get_entitlements() {
+        use test_cases::*;
+        run_tests(
+            get_entitlements_test_cases(),
+            |chat: Auth<_>, ()| async move { chat.get_entitlements().await },
+            |expected, result| match expected {
+                GetEntitlementsOut::Success(expected) => {
+                    assert_eq!(expected, result.expect("success"))
+                }
+                GetEntitlementsOut::Malformed => {
+                    assert_matches!(result, Err(RequestError::Unexpected { log_safe: _ }))
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn test_get_capabilities() {
+        use test_cases::*;
+        run_tests(
+            get_capabilities_test_cases(),
+            |chat: Auth<_>, ()| async move { chat.get_capabilities().await },
+            |expected, result| match expected {
+                GetCapabilitiesOut::Success(expected) => {
+                    assert_eq!(HashSet::from_iter(expected), result.expect("success"))
+                }
+                GetCapabilitiesOut::Malformed => {
+                    assert_matches!(result, Err(RequestError::Unexpected { log_safe: _ }))
+                }
             },
         );
     }

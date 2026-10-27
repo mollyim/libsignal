@@ -21,7 +21,7 @@ repositories {
 }
 
 allprojects {
-    version = "0.105.0-1"
+    version = "0.105.4-1"
     group   = "im.molly"
 
     tasks.withType(JavaCompile) {
