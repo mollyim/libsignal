@@ -44,6 +44,11 @@ allprojects {
     apply plugin: "org.jetbrains.dokka-javadoc"
 
     dokka {
+        pluginsConfiguration {
+            html {
+                footerMessage.set('© Signal Messenger and MollyIM')
+            }
+        }
         dokkaPublications.html {
             failOnWarning.set(System.getProperty("org.gradle.warning.mode") == "fail")
         }
