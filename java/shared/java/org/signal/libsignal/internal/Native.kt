@@ -270,6 +270,14 @@ internal object Native {
   public external fun AuthenticatedChatConnection_Destroy(handle: ObjectHandle): Unit
 
   @JvmStatic
+  public external fun AuthenticatedChatConnection_answer_challenge(
+    asyncRuntime: ObjectHandle,
+    chat: SimpleOwner,
+    token: String,
+    answer: Object,
+  ): CompletableFuture<Boolean>
+
+  @JvmStatic
   public external fun AuthenticatedChatConnection_clear_push_token(
     asyncRuntime: ObjectHandle,
     chat: SimpleOwner,
@@ -364,6 +372,12 @@ internal object Native {
 
   @JvmStatic
   public external fun AuthenticatedChatConnection_generate_totp_key(
+    asyncRuntime: ObjectHandle,
+    chat: SimpleOwner,
+  ): CompletableFuture<Object>
+
+  @JvmStatic
+  public external fun AuthenticatedChatConnection_get_account_identity(
     asyncRuntime: ObjectHandle,
     chat: SimpleOwner,
   ): CompletableFuture<Object>
@@ -2285,6 +2299,22 @@ internal object Native {
   ): Unit
 
   @JvmStatic
+  public external fun ProvisioningPublicKey_Deserialize(pubkeyBytes: ByteArray): ObjectHandle
+
+  @JvmStatic
+  public external fun ProvisioningPublicKey_Destroy(handle: ObjectHandle): Unit
+
+  @JvmStatic
+  public external fun ProvisioningPublicKey_Serialize(key: SimpleOwner): ByteArray
+
+  @JvmStatic
+  @Throws(Exception::class)
+  public external fun Provisioning_EncryptProvisionMessage(
+    secondaryPublicKey: SimpleOwner,
+    provisionMessage: ByteArray,
+  ): ByteArray
+
+  @JvmStatic
   @Throws(Exception::class)
   public external fun ReceiptCredentialPresentation_CheckValidContents(buffer: ByteArray): Unit
 
@@ -2321,6 +2351,22 @@ internal object Native {
 
   @JvmStatic
   public external fun ReceiptCredential_GetReceiptLevel(receiptCredential: ByteArray): Long
+
+  @JvmStatic
+  @Throws(Exception::class)
+  public external fun RecvProvisionCiphertextState_DecryptEnvelope(
+    state: SimpleOwner,
+    envelope: ByteArray,
+  ): ByteArray
+
+  @JvmStatic
+  public external fun RecvProvisionCiphertextState_Destroy(handle: ObjectHandle): Unit
+
+  @JvmStatic
+  public external fun RecvProvisionCiphertextState_Generate(): ObjectHandle
+
+  @JvmStatic
+  public external fun RecvProvisionCiphertextState_GetPublicKey(state: SimpleOwner): ObjectHandle
 
   @JvmStatic
   public external fun RegisterAccountRequest_Create(): ObjectHandle

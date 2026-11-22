@@ -47,8 +47,9 @@ use libsignal_net_chat::api::purchase::PaymentProvider;
 use libsignal_net_chat::api::usernames::UnauthenticatedChatApi as _;
 use libsignal_net_chat::api::{RequestError, UploadForm, UserBasedAuthorization};
 use libsignal_net_chat::grpc::accounts::{
-    ConfirmTotpKeyError, FinishWebAuthnRegistrationError, GenerateTotpKeyError, MAX_MFA_KEY_ID,
-    MfaKeyId, MfaKeyNotFound, MfaVerificationFailed, StartWebAuthnRegistrationError,
+    ChallengeAnswer, ConfirmTotpKeyError, FinishWebAuthnRegistrationError, GenerateTotpKeyError,
+    MAX_MFA_KEY_ID, MfaKeyId, MfaKeyNotFound, MfaVerificationFailed,
+    StartWebAuthnRegistrationError,
 };
 use libsignal_net_chat::grpc::backups::RedeemBackupReceiptFailure;
 use libsignal_net_chat::grpc::credentials::AuthCheckResult;
@@ -988,6 +989,18 @@ async fn AuthenticatedChatConnection_set_username_link(
         .await
 }
 
+#[bridge_io(TokioAsyncContext, nice = true)]
+async fn AuthenticatedChatConnection_get_account_identity(
+    chat: BridgeHandleRef<'_, AuthenticatedChatConnection>,
+) -> Result<BridgeAccountIdentity, RequestError<Infallible>> {
+    Ok(chat
+        .require_grpc()
+        .await
+        .get_account_identity()
+        .await?
+        .into())
+}
+
 // Only an account's primary device may delete the account.
 #[bridge_io(TokioAsyncContext, nice = true)]
 async fn AuthenticatedChatConnection_delete_account(
@@ -1550,6 +1563,18 @@ async fn AuthenticatedChatConnection_get_capabilities(
         .get_capabilities()
         .await
         .map(BridgeVec::from_iter)
+}
+
+#[bridge_io(TokioAsyncContext, nice = true)]
+async fn AuthenticatedChatConnection_answer_challenge(
+    chat: BridgeHandleRef<'_, AuthenticatedChatConnection>,
+    token: String,
+    answer: ChallengeAnswer,
+) -> Result<bool, RequestError<Infallible>> {
+    chat.require_grpc()
+        .await
+        .answer_challenge(token, answer)
+        .await
 }
 
 #[cfg(test)]

@@ -80,6 +80,9 @@ public object NativeTesting {
   ): CompletableFuture<Int>
 
   @JvmStatic
+  public external fun TESTING_AnswerChallengeTests(): Array<Object>
+
+  @JvmStatic
   public external fun TESTING_BackupDeleteAllTests(): Array<Object>
 
   @JvmStatic
@@ -391,6 +394,9 @@ public object NativeTesting {
 
   @JvmStatic
   public external fun TESTING_GenerateTotpKeyTests(): Array<Object>
+
+  @JvmStatic
+  public external fun TESTING_GetAccountIdentityTests(): Array<Object>
 
   @JvmStatic
   public external fun TESTING_GetBackupCdnCredentialsTests(): Array<Object>
@@ -801,6 +807,15 @@ public object NativeTesting {
 
   @JvmStatic
   public external fun TESTING_conversion_OptionalBytes_to_string(x: ByteArray?): String
+
+  @JvmStatic
+  public external fun TESTING_conversion_OptionalData32_to_string(x: ByteArray?): String
+
+  @JvmStatic
+  public external fun TESTING_conversion_OptionalData32_to_string_async(
+    asyncRuntime: ObjectHandle,
+    x: ByteArray?,
+  ): CompletableFuture<String>
 
   @JvmStatic
   public external fun TESTING_conversion_OptionalFloat_identity(x: Float?): Float?

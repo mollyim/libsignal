@@ -505,9 +505,9 @@ mod remote_derives {
         StartMfaVerificationResponse,
     };
     use libsignal_bridge_types::net::chat::{
-        BridgeConfirmedMfaKey, BridgeCopyBackupMediaOutcome, BridgeDeleteBackupMediaItem,
-        BridgeMediaBackupInfo, BridgeMessageBackupInfo, BridgeMfaMetadata, BridgePendingTotpKey,
-        BridgeWebAuthnCreateParameters,
+        BridgeAccountIdentity, BridgeConfirmedMfaKey, BridgeCopyBackupMediaOutcome,
+        BridgeDeleteBackupMediaItem, BridgeMediaBackupInfo, BridgeMessageBackupInfo,
+        BridgeMfaMetadata, BridgePendingTotpKey, BridgeWebAuthnCreateParameters,
     };
     use libsignal_core::Aci;
     use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
@@ -1242,6 +1242,14 @@ mod remote_derives {
     }
 
     #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::GetAccountIdentityOut)]
+    #[bridge(arg = false)]
+    pub(super) enum GetAccountIdentityOut {
+        Success(BridgeAccountIdentity),
+        MissingIdentifiers,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
     #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::GetEntitlementsOut)]
     #[bridge(arg = false)]
     pub enum GetEntitlementsOut {
@@ -1255,6 +1263,13 @@ mod remote_derives {
     pub enum GetCapabilitiesOut {
         Success(BridgeVec<DeviceCapability>),
         Malformed,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::AnswerChallengeArgs)]
+    pub(super) struct AnswerChallengeArgs {
+        token: String,
+        answer: libsignal_net_chat::grpc::accounts::ChallengeAnswer,
     }
 }
 
@@ -1315,6 +1330,10 @@ fn TESTING_SetPushTokenFcmTests() -> GrpcTestCases<String, ()> {
 #[bridge_fn(nice = true)]
 fn TESTING_ClearPushTokenTests() -> GrpcTestCases<(), ()> {
     libsignal_net_chat::grpc::devices::test_cases::clear_push_token_test_cases().into()
+}
+#[bridge_fn(nice = true)]
+fn TESTING_GetAccountIdentityTests() -> GrpcTestCases<(), remote_derives::GetAccountIdentityOut> {
+    libsignal_net_chat::grpc::accounts::test_cases::get_account_identity_test_cases().into()
 }
 #[bridge_fn(nice = true)]
 fn TESTING_DeleteAccountTests() -> GrpcTestCases<(), ()> {
@@ -1595,4 +1614,9 @@ fn TESTING_GetEntitlementsTests() -> GrpcTestCases<(), remote_derives::GetEntitl
 #[bridge_fn(nice = true)]
 fn TESTING_GetCapabilitiesTests() -> GrpcTestCases<(), remote_derives::GetCapabilitiesOut> {
     libsignal_net_chat::grpc::accounts::test_cases::get_capabilities_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_AnswerChallengeTests() -> GrpcTestCases<remote_derives::AnswerChallengeArgs, bool> {
+    libsignal_net_chat::grpc::accounts::test_cases::answer_challenge_test_cases().into()
 }

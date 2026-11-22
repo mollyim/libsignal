@@ -25,6 +25,25 @@ util.initLogger();
 config.truncateThreshold = 0;
 
 describe('AuthAccountsService', () => {
+  describe('getAccountIdentity', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_GetAccountIdentityTests(),
+      connectAuth<AuthAccountsService>,
+      async (
+        chat: AuthAccountsService,
+        _req: void,
+        resp: NativeNice.GetAccountIdentityOut
+      ) => {
+        const out = chat.getAccountIdentity({});
+        if (resp === 'missingIdentifiers') {
+          await expect(out).to.eventually.be.rejectedWith(LibSignalErrorBase);
+        } else {
+          expect(await out).to.deep.equal(resp.success);
+        }
+      }
+    );
+  });
+
   describe('deleteAccount', () => {
     defineTestGrpcCases(
       NativeNice.TESTING_DeleteAccountTests(),
@@ -508,6 +527,17 @@ describe('AuthAccountsService', () => {
           default:
             expect(await out).to.deep.equal(new Set(resp.success));
         }
+      }
+    );
+  });
+
+  describe('answerChallenge', () => {
+    defineTestGrpcCases(
+      NativeNice.TESTING_AnswerChallengeTests(),
+      connectAuth<AuthAccountsService>,
+      async (chat, args, resp: boolean) => {
+        const out = chat.answerChallenge({ token: args.token, ...args.answer });
+        expect(await out).to.equal(resp);
       }
     );
   });

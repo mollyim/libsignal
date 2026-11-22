@@ -27,6 +27,11 @@ import org.signal.libsignal.internal.NativeNiceHelpers.mapPair
 import org.signal.libsignal.internal.NativeNiceHelpers.stringMapArgConverter
 import org.signal.libsignal.internal.NativeNiceHelpers.stringMapReturnConverter
 
+public data class AnswerChallengeArgs(
+  public val token: String,
+  public val answer: org.signal.libsignal.internal.BridgeChallengeAnswer,
+)
+
 public data class CheckSvrCredentialsArgs(
   public val number: String,
   public val passwords: List<String>,
@@ -158,6 +163,14 @@ public sealed class GenerateTotpKeyOut {
   public data object TooManyTotpKeys : GenerateTotpKeyOut()
 
   public data object TooManyMfaKeys : GenerateTotpKeyOut()
+}
+
+public sealed class GetAccountIdentityOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.internal.BridgeAccountIdentity,
+  ) : GetAccountIdentityOut()
+
+  public data object MissingIdentifiers : GetAccountIdentityOut()
 }
 
 public sealed class GetCapabilitiesOut {
@@ -565,6 +578,22 @@ public data class TestingAnySignedPreKey(
   public val sig: ByteArray,
 )
 
+public object AnswerChallengeArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    token: Any?,
+    answer: Any?,
+  ): Any? =
+    AnswerChallengeArgs(
+      token =
+        identity(token as String),
+      answer =
+        downcastFromObject<org.signal.libsignal.internal.BridgeChallengeAnswer>(answer as Object),
+    )
+}
+
 public object BadgeVisibility_DoNotSet_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -584,6 +613,28 @@ public object BadgeVisibility_SetPrimary_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = org.signal.libsignal.net.BadgeVisibility.SetPrimary
+}
+
+public object BridgeChallengeAnswer_Push_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    BridgeChallengeAnswer.Push(
+      _0 =
+        identity(_0 as String),
+    )
+}
+
+public object BridgeChallengeAnswer_Captcha_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    BridgeChallengeAnswer.Captcha(
+      _0 =
+        identity(_0 as String),
+    )
 }
 
 public object BridgeCopyBackupMediaItem_ReturnConverter {
@@ -1089,6 +1140,24 @@ public object GenerateTotpKeyOut_TooManyMfaKeys_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = GenerateTotpKeyOut.TooManyMfaKeys
+}
+
+public object GetAccountIdentityOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetAccountIdentityOut.Success(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.BridgeAccountIdentity>(_0 as Object),
+    )
+}
+
+public object GetAccountIdentityOut_MissingIdentifiers_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = GetAccountIdentityOut.MissingIdentifiers
 }
 
 public object GetCapabilitiesOut_Success_ReturnConverter {
@@ -2435,6 +2504,16 @@ public fun MyTestStruct.toFfiArgType(): MyTestStruct_FfiArgType =
 public fun MyTestStruct.toFfiArgTypeObject(): Object = convertToObject(this.toFfiArgType())
 
 public object NativeTestingNice {
+  public fun TESTING_AnswerChallengeTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.AnswerChallengeArgs, Boolean>> {
+    val ffiOut =
+      NativeTesting.TESTING_AnswerChallengeTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Boolean, org.signal.libsignal.internal.AnswerChallengeArgs, Boolean>({
+        downcastFromObject<org.signal.libsignal.internal.AnswerChallengeArgs>(it)
+      }, { identity(it) })(ffiOut)
+  }
+
   public fun TESTING_BackupDeleteAllTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.SimpleBackupTestOut>> {
     val ffiOut =
       NativeTesting.TESTING_BackupDeleteAllTests()
@@ -2636,6 +2715,16 @@ public object NativeTestingNice {
       .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.GenerateTotpKeyOut>({
         identity(it)
       }, { downcastFromObject<org.signal.libsignal.internal.GenerateTotpKeyOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_GetAccountIdentityTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.GetAccountIdentityOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetAccountIdentityTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.GetAccountIdentityOut>({
+        identity(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetAccountIdentityOut>(it) })(ffiOut)
   }
 
   public fun TESTING_GetBackupCdnCredentialsTests(): List<org.signal.libsignal.net.GrpcTestCase<Int, org.signal.libsignal.internal.GetCdnCredentialsOut>> {
@@ -3432,6 +3521,32 @@ public object NativeTestingNice {
       )
 
     return identity(ffiOut)
+  }
+
+  public fun TESTING_conversion_OptionalData32_to_string(x: ByteArray?): String {
+    val ffi_x = identity(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_OptionalData32_to_string(
+        ffi_x,
+      )
+
+    return identity(ffiOut)
+  }
+
+  public fun TESTING_conversion_OptionalData32_to_string_async(
+    asyncCtx: TokioAsyncContext,
+    x: ByteArray?,
+  ): CompletableFuture<String> {
+    val ffi_x = identity(x)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        NativeTesting.TESTING_conversion_OptionalData32_to_string_async(
+          asyncCtxHandle.nativeHandle(),
+          ffi_x,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
   }
 
   public fun TESTING_conversion_OptionalFloat_identity(x: Float?): Float? {

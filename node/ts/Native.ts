@@ -164,6 +164,11 @@ export type ReturnFfiAccountEntitlements = {
   backup: ReturnFfiBackupEntitlement | null;
 };
 
+export type ReturnFfiAnswerChallengeArgs = {
+  token: string;
+  answer: ReturnFfiBridgeChallengeAnswer;
+};
+
 export type ReturnFfiAuthCheckResult =
   | {
       __type: 0;
@@ -195,6 +200,24 @@ export type ReturnFfiBadgeVisibility =
     }
   | {
       __type: 2;
+    };
+
+export type ReturnFfiBridgeAccountIdentity = {
+  aci: Bytes;
+  pni: Bytes | null;
+  e164: string | null;
+  username_hash: Bytes | null;
+  username_link_handle: Bytes | null;
+};
+
+export type ReturnFfiBridgeChallengeAnswer =
+  | {
+      __type: 0;
+      _0: string;
+    }
+  | {
+      __type: 1;
+      _0: string;
     };
 
 export type ReturnFfiBridgeConfirmedMfaKey = {
@@ -415,7 +438,7 @@ export type ReturnFfiCreateDonationPermitsOut =
     };
 
 export type ReturnFfiCreateLoginReceiptCredentialArgs = {
-  payment_processor: ReturnFfiPaymentProvider;
+  payment_processor: ReturnFfiPaymentProviderInternal;
   purchase_identifier: string;
   receipt_credential_request_context: Bytes;
   server_params: ReturnFfiServerPublicParamsSerialized;
@@ -528,6 +551,15 @@ export type ReturnFfiGenerateTotpKeyOut =
     }
   | {
       __type: 2;
+    };
+
+export type ReturnFfiGetAccountIdentityOut =
+  | {
+      __type: 0;
+      _0: ReturnFfiBridgeAccountIdentity;
+    }
+  | {
+      __type: 1;
     };
 
 export type ReturnFfiGetCapabilitiesOut =
@@ -796,7 +828,7 @@ export type ReturnFfiMyTestStruct = {
   my_string_field: string;
 };
 
-export type ReturnFfiPaymentProvider =
+export type ReturnFfiPaymentProviderInternal =
   | {
       __type: 0;
     }
@@ -1038,6 +1070,16 @@ export type ArgFfiBadgeVisibility =
       __type: 2;
     };
 
+export type ArgFfiBridgeChallengeAnswer =
+  | {
+      __type: 0;
+      _0: string;
+    }
+  | {
+      __type: 1;
+      _0: string;
+    };
+
 export type ArgFfiBridgeCopyBackupMediaItem = {
   source_attachment_cdn: number;
   source_key: string;
@@ -1180,7 +1222,7 @@ export type ArgFfiMyTestStruct = {
   my_string_field: string;
 };
 
-export type ArgFfiPaymentProvider =
+export type ArgFfiPaymentProviderInternal =
   | {
       __type: 0;
     }
@@ -1196,6 +1238,7 @@ export type ArgFfiPaymentProvider =
 
 export const NetRemoteConfigKeys = [
   'chatRequestConnectionCheckTimeoutMillis',
+  'offerCompressionForKeyTransparency',
   'grpc.AccountsAnonymousLookupUsernameHash',
   'grpc.AccountsAnonymousLookupUsernameLink.2',
   'grpc.AccountsAnonymousCheckAccountExistence.2',
@@ -1256,6 +1299,12 @@ type NativeFunctions = {
   ) => Serialized<UuidCiphertext>;
   AuthCredentialWithPniResponse_CheckValidContents: (bytes: Bytes) => void;
   AuthCredentialWithPni_CheckValidContents: (bytes: Bytes) => void;
+  AuthenticatedChatConnection_answer_challenge: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>,
+    token: string,
+    answer: ArgFfiBridgeChallengeAnswer
+  ) => CancellablePromise<boolean>;
   AuthenticatedChatConnection_clear_push_token: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>
@@ -1329,6 +1378,10 @@ type NativeFunctions = {
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>
   ) => CancellablePromise<ReturnFfiBridgePendingTotpKey>;
+  AuthenticatedChatConnection_get_account_identity: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    chat: Wrapper<AuthenticatedChatConnection>
+  ) => CancellablePromise<ReturnFfiBridgeAccountIdentity>;
   AuthenticatedChatConnection_get_capabilities: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<AuthenticatedChatConnection>
@@ -2362,6 +2415,16 @@ type NativeFunctions = {
     chat: Wrapper<ProvisioningChatConnection>,
     listener: ProvisioningListener
   ) => void;
+  ProvisioningPublicKey_Deserialize: (
+    pubkey_bytes: Bytes
+  ) => ProvisioningPublicKey;
+  ProvisioningPublicKey_Serialize: (
+    key: Wrapper<ProvisioningPublicKey>
+  ) => Bytes;
+  Provisioning_EncryptProvisionMessage: (
+    secondary_public_key: Wrapper<ProvisioningPublicKey>,
+    provision_message: Bytes
+  ) => Bytes;
   PublicKey_Deserialize: (data: Bytes) => PublicKey;
   PublicKey_Equals: (
     lhs: Wrapper<PublicKey>,
@@ -2403,6 +2466,14 @@ type NativeFunctions = {
   ReceiptCredential_GetReceiptLevel: (
     receipt_credential: Serialized<ReceiptCredential>
   ) => bigint;
+  RecvProvisionCiphertextState_DecryptEnvelope: (
+    state: Wrapper<RecvProvisionCiphertextState>,
+    envelope: Bytes
+  ) => Bytes;
+  RecvProvisionCiphertextState_Generate: () => RecvProvisionCiphertextState;
+  RecvProvisionCiphertextState_GetPublicKey: (
+    state: Wrapper<RecvProvisionCiphertextState>
+  ) => ProvisioningPublicKey;
   RegisterAccountRequest_Create: () => RegisterAccountRequest;
   RegisterAccountRequest_SetAccountPassword: (
     register_account: Wrapper<RegisterAccountRequest>,
@@ -3041,6 +3112,9 @@ type NativeFunctions = {
   SvrKey_DeriveRegistrationLock: (svr_key: Bytes) => Bytes;
   SvrKey_DeriveRegistrationRecoveryPassword: (svr_key: Bytes) => Bytes;
   SvrKey_DeriveStorageServiceKey: (svr_key: Bytes) => Bytes;
+  TESTING_AnswerChallengeTests: () => Array<
+    GrpcTestCaseFfi<ReturnFfiAnswerChallengeArgs, boolean>
+  >;
   TESTING_BackupDeleteAllTests: () => Array<
     GrpcTestCaseFfi<void, ReturnFfiSimpleBackupTestOut>
   >;
@@ -3272,6 +3346,9 @@ type NativeFunctions = {
   ) => CancellablePromise<number>;
   TESTING_GenerateTotpKeyTests: () => Array<
     GrpcTestCaseFfi<void, ReturnFfiGenerateTotpKeyOut>
+  >;
+  TESTING_GetAccountIdentityTests: () => Array<
+    GrpcTestCaseFfi<void, ReturnFfiGetAccountIdentityOut>
   >;
   TESTING_GetBackupCdnCredentialsTests: () => Array<
     GrpcTestCaseFfi<number, ReturnFfiGetCdnCredentialsOut>
@@ -3603,6 +3680,11 @@ type NativeFunctions = {
     x: Bytes | null
   ) => CancellablePromise<Bytes | null>;
   TESTING_conversion_OptionalBytes_to_string: (x: Bytes | null) => string;
+  TESTING_conversion_OptionalData32_to_string: (x: Bytes | null) => string;
+  TESTING_conversion_OptionalData32_to_string_async: (
+    asyncRuntime: Wrapper<TokioAsyncContext>,
+    x: Bytes | null
+  ) => CancellablePromise<string>;
   TESTING_conversion_OptionalFloat_identity: (
     x: number | null
   ) => number | null;
@@ -3812,7 +3894,7 @@ type NativeFunctions = {
   UnauthenticatedChatConnection_create_login_receipt_credential: (
     asyncRuntime: Wrapper<TokioAsyncContext>,
     chat: Wrapper<UnauthenticatedChatConnection>,
-    payment_processor: ArgFfiPaymentProvider,
+    payment_processor: ArgFfiPaymentProviderInternal,
     purchase_identifier: string,
     receipt_credential_request_context: Bytes,
     server_params: Wrapper<ServerPublicParams>,
@@ -3994,6 +4076,7 @@ const {
   AuthCredentialPresentation_GetUuidCiphertext,
   AuthCredentialWithPniResponse_CheckValidContents,
   AuthCredentialWithPni_CheckValidContents,
+  AuthenticatedChatConnection_answer_challenge,
   AuthenticatedChatConnection_clear_push_token,
   AuthenticatedChatConnection_clear_registration_lock,
   AuthenticatedChatConnection_confirm_totp_key,
@@ -4007,6 +4090,7 @@ const {
   AuthenticatedChatConnection_finish_mfa_verification,
   AuthenticatedChatConnection_finish_web_authn_registration,
   AuthenticatedChatConnection_generate_totp_key,
+  AuthenticatedChatConnection_get_account_identity,
   AuthenticatedChatConnection_get_capabilities,
   AuthenticatedChatConnection_get_currency_conversions,
   AuthenticatedChatConnection_get_devices,
@@ -4323,6 +4407,9 @@ const {
   ProvisioningChatConnection_disconnect,
   ProvisioningChatConnection_info,
   ProvisioningChatConnection_init_listener,
+  ProvisioningPublicKey_Deserialize,
+  ProvisioningPublicKey_Serialize,
+  Provisioning_EncryptProvisionMessage,
   PublicKey_Deserialize,
   PublicKey_Equals,
   PublicKey_GetPublicKeyBytes,
@@ -4340,6 +4427,9 @@ const {
   ReceiptCredential_CheckValidContents,
   ReceiptCredential_GetReceiptExpirationTime,
   ReceiptCredential_GetReceiptLevel,
+  RecvProvisionCiphertextState_DecryptEnvelope,
+  RecvProvisionCiphertextState_Generate,
+  RecvProvisionCiphertextState_GetPublicKey,
   RegisterAccountRequest_Create,
   RegisterAccountRequest_SetAccountPassword,
   RegisterAccountRequest_SetIdentityPqLastResortPreKey,
@@ -4512,6 +4602,7 @@ const {
   SvrKey_DeriveRegistrationLock,
   SvrKey_DeriveRegistrationRecoveryPassword,
   SvrKey_DeriveStorageServiceKey,
+  TESTING_AnswerChallengeTests,
   TESTING_BackupDeleteAllTests,
   TESTING_BackupListMediaTests,
   TESTING_BackupRefreshTests,
@@ -4585,6 +4676,7 @@ const {
   TESTING_FutureProducesPointerType,
   TESTING_FutureSuccess,
   TESTING_GenerateTotpKeyTests,
+  TESTING_GetAccountIdentityTests,
   TESTING_GetBackupCdnCredentialsTests,
   TESTING_GetBackupSvrBCredentialsTests,
   TESTING_GetCapabilitiesTests,
@@ -4717,6 +4809,8 @@ const {
   TESTING_conversion_OptionalBytes_identity,
   TESTING_conversion_OptionalBytes_identity_async,
   TESTING_conversion_OptionalBytes_to_string,
+  TESTING_conversion_OptionalData32_to_string,
+  TESTING_conversion_OptionalData32_to_string_async,
   TESTING_conversion_OptionalFloat_identity,
   TESTING_conversion_OptionalFloat_identity_async,
   TESTING_conversion_OptionalFloat_to_string,
@@ -4831,6 +4925,7 @@ export {
   AuthCredentialPresentation_GetUuidCiphertext,
   AuthCredentialWithPniResponse_CheckValidContents,
   AuthCredentialWithPni_CheckValidContents,
+  AuthenticatedChatConnection_answer_challenge,
   AuthenticatedChatConnection_clear_push_token,
   AuthenticatedChatConnection_clear_registration_lock,
   AuthenticatedChatConnection_confirm_totp_key,
@@ -4844,6 +4939,7 @@ export {
   AuthenticatedChatConnection_finish_mfa_verification,
   AuthenticatedChatConnection_finish_web_authn_registration,
   AuthenticatedChatConnection_generate_totp_key,
+  AuthenticatedChatConnection_get_account_identity,
   AuthenticatedChatConnection_get_capabilities,
   AuthenticatedChatConnection_get_currency_conversions,
   AuthenticatedChatConnection_get_devices,
@@ -5160,6 +5256,9 @@ export {
   ProvisioningChatConnection_disconnect,
   ProvisioningChatConnection_info,
   ProvisioningChatConnection_init_listener,
+  ProvisioningPublicKey_Deserialize,
+  ProvisioningPublicKey_Serialize,
+  Provisioning_EncryptProvisionMessage,
   PublicKey_Deserialize,
   PublicKey_Equals,
   PublicKey_GetPublicKeyBytes,
@@ -5177,6 +5276,9 @@ export {
   ReceiptCredential_CheckValidContents,
   ReceiptCredential_GetReceiptExpirationTime,
   ReceiptCredential_GetReceiptLevel,
+  RecvProvisionCiphertextState_DecryptEnvelope,
+  RecvProvisionCiphertextState_Generate,
+  RecvProvisionCiphertextState_GetPublicKey,
   RegisterAccountRequest_Create,
   RegisterAccountRequest_SetAccountPassword,
   RegisterAccountRequest_SetIdentityPqLastResortPreKey,
@@ -5349,6 +5451,7 @@ export {
   SvrKey_DeriveRegistrationLock,
   SvrKey_DeriveRegistrationRecoveryPassword,
   SvrKey_DeriveStorageServiceKey,
+  TESTING_AnswerChallengeTests,
   TESTING_BackupDeleteAllTests,
   TESTING_BackupListMediaTests,
   TESTING_BackupRefreshTests,
@@ -5422,6 +5525,7 @@ export {
   TESTING_FutureProducesPointerType,
   TESTING_FutureSuccess,
   TESTING_GenerateTotpKeyTests,
+  TESTING_GetAccountIdentityTests,
   TESTING_GetBackupCdnCredentialsTests,
   TESTING_GetBackupSvrBCredentialsTests,
   TESTING_GetCapabilitiesTests,
@@ -5554,6 +5658,8 @@ export {
   TESTING_conversion_OptionalBytes_identity,
   TESTING_conversion_OptionalBytes_identity_async,
   TESTING_conversion_OptionalBytes_to_string,
+  TESTING_conversion_OptionalData32_to_string,
+  TESTING_conversion_OptionalData32_to_string_async,
   TESTING_conversion_OptionalFloat_identity,
   TESTING_conversion_OptionalFloat_identity_async,
   TESTING_conversion_OptionalFloat_to_string,
@@ -5677,6 +5783,10 @@ export /*trait*/ type IdentityKeyStore = {
     publicKey: PublicKey,
     direction: number
   ) => Promise<boolean>;
+  recordReceivedIdentityKey: (
+    address: ProtocolAddress,
+    publicKey: PublicKey
+  ) => Promise<void>;
 };
 
 export /*trait*/ type InputStream = {
@@ -5884,6 +5994,9 @@ export interface ProtocolAddress {
 export interface ProvisioningChatConnection {
   readonly __type: unique symbol;
 }
+export interface ProvisioningPublicKey {
+  readonly __type: unique symbol;
+}
 export interface PublicKey {
   readonly __type: unique symbol;
 }
@@ -5900,6 +6013,9 @@ export interface ReceiptCredentialRequestContext {
   readonly __type: unique symbol;
 }
 export interface ReceiptCredentialResponse {
+  readonly __type: unique symbol;
+}
+export interface RecvProvisionCiphertextState {
   readonly __type: unique symbol;
 }
 export interface RegisterAccountRequest {
