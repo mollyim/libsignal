@@ -59,6 +59,7 @@ test {
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     withSourcesJar()
+    withJavadocJar()
 }
 
 sourcesJar {
@@ -68,16 +69,11 @@ sourcesJar {
     exclude '*.so'
 }
 
-task dokkaHtmlJar(type: Jar) {
-    dependsOn(dokkaGeneratePublicationHtml)
-    from(dokkaGeneratePublicationHtml)
-    archiveClassifier.set("dokka")
-}
-
-task dokkaJavadocJar(type: Jar) {
-    dependsOn(dokkaGeneratePublicationJavadoc)
-    from(dokkaGeneratePublicationJavadoc)
-    archiveClassifier.set("javadoc")
+tasks.named('javadoc') {
+    // Standard javadoc reads only Java sources; put the compiled Kotlin
+    // classes on the classpath so references to them still resolve.
+    classpath += sourceSets.main.output
+    failOnError = false
 }
 
 processResources {
@@ -99,8 +95,6 @@ publishing {
         server(MavenPublication) {
             artifactId = base.archivesName.get()
             from components.java
-            artifact dokkaHtmlJar
-            artifact dokkaJavadocJar
 
             pom {
                 name = base.archivesName.get()

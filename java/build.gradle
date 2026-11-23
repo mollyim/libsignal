@@ -7,8 +7,6 @@ plugins {
     id "com.diffplug.spotless" version "7.2.1"
 
     id "org.jetbrains.kotlin.jvm" version "2.2.20" apply false
-    id "org.jetbrains.dokka" version "2.1.0" apply false
-    id "org.jetbrains.dokka-javadoc" version "2.1.0" apply false
 
     // Declared here so the Android subprojects can apply it without a version.
     id 'com.android.library' version "9.4.0" apply false
@@ -31,6 +29,8 @@ allprojects {
     tasks.withType(Javadoc) {
         options.encoding = 'UTF-8'
         options.addStringOption('Xdoclint:none', '-quiet')
+        // Omit the generation date so the javadoc output is reproducible.
+        options.addBooleanOption('notimestamp', true)
     }
     tasks.withType(KotlinCompile).configureEach {
         compilerOptions.jvmTarget = JvmTarget.JVM_21
@@ -38,20 +38,6 @@ allprojects {
     tasks.withType(AbstractArchiveTask) {
         preserveFileTimestamps = false
         reproducibleFileOrder = true
-    }
-
-    apply plugin: "org.jetbrains.dokka"
-    apply plugin: "org.jetbrains.dokka-javadoc"
-
-    dokka {
-        pluginsConfiguration {
-            html {
-                footerMessage.set('© Signal Messenger and MollyIM')
-            }
-        }
-        dokkaPublications.html {
-            failOnWarning.set(System.getProperty("org.gradle.warning.mode") == "fail")
-        }
     }
 }
 

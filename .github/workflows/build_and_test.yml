@@ -245,7 +245,7 @@ jobs:
 
     - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal --target aarch64-linux-android,armv7-linux-androideabi
 
-    - run: ./gradlew --dependency-verification strict --warning-mode fail :android:build :android:assembleAndroidTest :android:lintDebug :android:packaging-test:assembleDebugAndroidTest :android:benchmarks:assembleReleaseAndroidTest -PandroidArchs=arm,arm64 -x :makeJniLibrariesDesktop | tee ./gradle-output.txt
+    - run: ./gradlew --dependency-verification strict --warning-mode fail :android:build :android:assembleAndroidTest :android:lintDebug :android:packaging-test:assembleDebugAndroidTest :android:benchmarks:assembleReleaseAndroidTest :android:javadocJar -PandroidArchs=arm,arm64 -x :makeJniLibrariesDesktop | tee ./gradle-output.txt
       working-directory: java
       shell: bash # Explicitly setting the shell turns on pipefail in GitHub Actions
 
@@ -307,7 +307,7 @@ jobs:
     - name: Verify that the JNI bindings are up to date
       run: cargo run -p libsignal-jni-native_kt -- --verify
 
-    - run: ./gradlew --dependency-verification strict -Dorg.gradle.warning.mode=fail build dokkaGenerate -PskipAndroid
+    - run: ./gradlew --dependency-verification strict -Dorg.gradle.warning.mode=fail build :client:javadocJar :server:javadocJar -PskipAndroid
       working-directory: java
 
     - name: Archive reports for failed build

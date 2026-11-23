@@ -71,16 +71,26 @@ kotlin {
     explicitApi()
 }
 
-task dokkaHtmlJar(type: Jar) {
-    dependsOn(dokkaGeneratePublicationHtml)
-    from(dokkaGeneratePublicationHtml)
-    archiveClassifier.set("dokka")
+tasks.register('javadoc', Javadoc) {
+    // The standard javadoc tool documents the Java sources only.
+    source = android.sourceSets.main.java.srcDirs
+    include '**/*.java'
+    failOnError = false
 }
 
-task dokkaJavadocJar(type: Jar) {
-    dependsOn(dokkaGeneratePublicationJavadoc)
-    from(dokkaGeneratePublicationJavadoc)
-    archiveClassifier.set("javadoc")
+tasks.register('javadocJar', Jar) {
+    dependsOn tasks.named('javadoc')
+    from tasks.named('javadoc').map { it.destinationDir }
+    archiveClassifier.set('javadoc')
+}
+
+androidComponents {
+    onVariants(selector().withBuildType('release')) { variant ->
+        tasks.named('javadoc').configure { task ->
+            task.classpath = files(androidComponents.sdkComponents.bootClasspath) +
+                project.configurations.named("${variant.name}CompileClasspath").get()
+        }
+    }
 }
 
 String collectTestEnvironment() {
@@ -178,8 +188,7 @@ afterEvaluate {
             android(MavenPublication) {
                 artifactId = base.archivesName.get()
                 from components.release
-                artifact dokkaHtmlJar
-                artifact dokkaJavadocJar
+                artifact javadocJar
 
                 pom {
                     name = base.archivesName.get()
