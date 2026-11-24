@@ -96,23 +96,6 @@ clean.dependsOn([cargoClean, cleanJni])
 
 evaluationDependsOnChildren()
 
-subprojects {
-  plugins.withType(MavenPublishPlugin) {
-    publishing {
-      repositories {
-        maven {
-          name = 'Cloudsmith'
-          url = uri('https://maven.cloudsmith.io/mollyim/libsignal/')
-          credentials {
-            username = System.getenv('CLOUDSMITH_USER')
-            password = System.getenv('CLOUDSMITH_API_KEY')
-          }
-        }
-      }
-    }
-  }
-}
-
 spotless {
     kotlin {
         target allprojects.collectMany {

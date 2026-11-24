@@ -16,7 +16,7 @@ $(error Unsupported TARGET_PLATFORM='$(TARGET_PLATFORM)')
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help assemble test stage clean
+.PHONY: help assemble test clean
 
 # Variables are documented by a preceding comment in the form "## text".
 help:
@@ -26,7 +26,6 @@ help:
 	@echo "  help       Show this help"
 	@echo "  assemble   Build artifacts for export"
 	@echo "  test       Run tests"
-	@echo "  stage      Publish to staging repository"
 	@echo "  clean      Remove build artifacts"
 	@echo
 	@echo "Variables:"
@@ -40,9 +39,6 @@ assemble:
 
 test:
 	$(do_test)
-
-stage:
-	$(do_stage)
 
 clean:
 	$(do_clean)
