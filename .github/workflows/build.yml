@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v6
@@ -34,19 +34,44 @@ jobs:
         cache-read-only: true
 
     - name: Build Docker image
-      run: docker build -f Dockerfile.android -t libsignal-builder .
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: Dockerfile.android
+        load: true
+        tags: libsignal-builder
+        cache-from: type=gha,scope=libsignal-builder
+        cache-to: type=gha,scope=libsignal-builder,mode=max
 
-    - name: Compile library inside Docker
+    - name: Assemble and test inside Docker
       run: |
-        mkdir -p "$RUNNER_TEMP/m2-repository"
-        docker run \
+        docker run --name builder-run \
           -v "$HOME/.gradle/caches:/.gradle-ro-cache:ro" \
-          -v "$RUNNER_TEMP/m2-repository:/root/.m2/repository" \
-          libsignal-builder assemble
+          libsignal-builder assemble test
 
-    - name: Export Maven repository
+    - name: Commit the builder run
+      run: docker commit builder-run localhost/libsignal-snapshot
+
+    - name: Build the artifacts image
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: Dockerfile.android
+        target: artifacts
+        build-contexts: assemble=docker-image://localhost/libsignal-snapshot
+        outputs: type=local,dest=artifacts
+        provenance: false
+
+    - name: List artifact checksums
+      working-directory: artifacts
+      run: |
+        find . -type f -printf '%P\0' | sort -z | xargs -0 -r sha256sum -b --
+
+    - name: Archive release artifacts
       uses: actions/upload-artifact@v7
       with:
-        name: libsignal-maven-local
-        path: "${{ runner.temp }}/m2-repository"
+        name: libsignal-artifacts
+        path: artifacts
         if-no-files-found: error
