@@ -33,36 +33,39 @@ jobs:
       with:
         cache-read-only: true
 
-    - name: Build Docker image
+    - name: Build the toolchain
       uses: docker/build-push-action@v7
       with:
         builder: default
         context: .
         file: Dockerfile.android
-        load: true
-        tags: libsignal-builder
+        target: toolchain
+        outputs: type=cacheonly
         cache-from: type=gha,scope=libsignal-builder
         cache-to: type=gha,scope=libsignal-builder,mode=max
 
-    - name: Assemble and test inside Docker
-      run: |
-        docker run --name builder-run \
-          -v "$HOME/.gradle/caches:/.gradle-ro-cache:ro" \
-          libsignal-builder assemble test
+    - name: Assemble and test
+      uses: docker/build-push-action@v7
+      with:
+        builder: default
+        context: .
+        file: Dockerfile.android
+        target: test
+        outputs: type=cacheonly
+        build-contexts: gradle-ro-cache=/home/runner/.gradle/caches
+        cache-from: type=gha,scope=libsignal-builder
 
-    - name: Commit the builder run
-      run: docker commit builder-run localhost/libsignal-snapshot
-
-    - name: Build the artifacts image
+    - name: Export assembled artifacts
       uses: docker/build-push-action@v7
       with:
         builder: default
         context: .
         file: Dockerfile.android
         target: artifacts
-        build-contexts: assemble=docker-image://localhost/libsignal-snapshot
         outputs: type=local,dest=artifacts
         provenance: false
+        build-contexts: gradle-ro-cache=/home/runner/.gradle/caches
+        cache-from: type=gha,scope=libsignal-builder
 
     - name: List artifact checksums
       working-directory: artifacts
